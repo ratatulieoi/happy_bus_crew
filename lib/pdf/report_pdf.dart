@@ -35,11 +35,8 @@ class ReportPdfBuilder {
           pw.SizedBox(height: 12),
           _buildHeaderInfo(r),
           pw.SizedBox(height: 14),
-          _buildSectionTitle('A. Rincian Pendapatan'),
-          _buildItemTable(r.pendapatan, total: r.totalPendapatan),
-          pw.SizedBox(height: 10),
-          _buildSectionTitle('B. Rincian Pengeluaran'),
-          _buildItemTable(r.pengeluaran, total: r.totalPengeluaran),
+          _buildSectionTitle('Rincian Keuangan'),
+          _buildFinanceTable(r),
           pw.SizedBox(height: 12),
           _buildSummary(r),
           pw.SizedBox(height: 24),
@@ -153,7 +150,7 @@ class ReportPdfBuilder {
     );
   }
 
-  // --------------------------------------------------------------- tables
+  // --------------------------------------------------------------- finance table
   static pw.Widget _buildSectionTitle(String text) {
     return pw.Padding(
       padding: const pw.EdgeInsets.only(bottom: 4),
@@ -164,8 +161,15 @@ class ReportPdfBuilder {
     );
   }
 
-  static pw.Widget _buildItemTable(List<LineItem> items,
-      {required int total}) {
+  static pw.Widget _buildFinanceTable(Report r) {
+    final items = [
+      {'label': 'Uang Saku', 'value': r.uangSaku},
+      {'label': 'BBM', 'value': r.bbm},
+      {'label': 'Uang Makan', 'value': r.uangMakan},
+      {'label': 'Extra', 'value': r.extra},
+      {'label': 'Tagihan', 'value': r.tagihan},
+    ];
+
     final rows = <pw.TableRow>[
       pw.TableRow(
         decoration: const pw.BoxDecoration(color: _lightGray),
@@ -179,17 +183,17 @@ class ReportPdfBuilder {
         pw.TableRow(
           children: [
             _tableCell('${i + 1}', align: pw.TextAlign.center),
-            _tableCell(items[i].keterangan),
-            _tableCell(formatNumberId(items[i].jumlah),
+            _tableCell(items[i]['label'] as String),
+            _tableCell(formatNumberId(items[i]['value'] as int),
                 align: pw.TextAlign.right),
           ],
         ),
       pw.TableRow(
         decoration: const pw.BoxDecoration(color: _lightGray),
         children: [
-          _tableCell('TOTAL', bold: true, align: pw.TextAlign.center),
           _tableCell('', bold: true),
-          _tableCell(formatNumberId(total), bold: true, align: pw.TextAlign.right),
+          _tableCell('SISA', bold: true),
+          _tableCell(formatNumberId(r.sisa), bold: true, align: pw.TextAlign.right),
         ],
       ),
     ];
@@ -222,7 +226,7 @@ class ReportPdfBuilder {
 
   // --------------------------------------------------------------- summary
   static pw.Widget _buildSummary(Report r) {
-    final isPositif = r.selisih >= 0;
+    final isPositif = r.sisa >= 0;
     return pw.Container(
       padding: const pw.EdgeInsets.all(10),
       decoration: pw.BoxDecoration(
@@ -231,7 +235,7 @@ class ReportPdfBuilder {
       ),
       child: pw.Column(
         children: [
-          _summaryRow('Total Pendapatan', formatRupiah(r.totalPendapatan)),
+          _summaryRow('Uang Saku', formatRupiah(r.uangSaku)),
           _summaryRow('Total Pengeluaran', formatRupiah(r.totalPengeluaran)),
           pw.Container(
             margin: const pw.EdgeInsets.only(top: 6),
@@ -240,8 +244,8 @@ class ReportPdfBuilder {
               border: pw.Border(top: pw.BorderSide(color: _black, width: 1)),
             ),
             child: _summaryRow(
-              isPositif ? 'SISA (SURPLUS)' : 'DEFISIT',
-              formatRupiah(r.selisih),
+              isPositif ? 'SISA' : 'DEFISIT',
+              formatRupiah(r.sisa),
               bold: true,
             ),
           ),

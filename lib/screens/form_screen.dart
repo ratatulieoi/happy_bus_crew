@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:intl/intl.dart';
 
 import '../db/database.dart';
 import '../models/report.dart';
@@ -30,8 +31,16 @@ class _FormScreenState extends State<FormScreen> {
   late final TextEditingController _kmAkhir;
   late final TextEditingController _namaCrew;
 
-  late List<LineItem> _pendapatan;
-  late List<LineItem> _pengeluaran;
+  // Keuangan
+  late final TextEditingController _uangSaku;
+  late final TextEditingController _bbm;
+  late final TextEditingController _uangMakan;
+  late final TextEditingController _extra;
+  late final TextEditingController _tagihan;
+
+  // Tanggal yang dipilih via date picker
+  DateTime? _tglBerangkat;
+  DateTime? _tglKembali;
 
   bool _saving = false;
   bool get _isEdit => widget.report != null;
@@ -49,8 +58,11 @@ class _FormScreenState extends State<FormScreen> {
     _kmAwal = TextEditingController(text: r == null ? '' : formatNumberId(r.kmAwal));
     _kmAkhir = TextEditingController(text: r == null ? '' : formatNumberId(r.kmAkhir));
     _namaCrew = TextEditingController(text: r?.namaCrew ?? '');
-    _pendapatan = List<LineItem>.from(r?.pendapatan ?? [LineItem(keterangan: '', jumlah: 0)]);
-    _pengeluaran = List<LineItem>.from(r?.pengeluaran ?? [LineItem(keterangan: '', jumlah: 0)]);
+    _uangSaku = TextEditingController(text: r == null || r.uangSaku == 0 ? '' : formatNumberId(r.uangSaku));
+    _bbm = TextEditingController(text: r == null || r.bbm == 0 ? '' : formatNumberId(r.bbm));
+    _uangMakan = TextEditingController(text: r == null || r.uangMakan == 0 ? '' : formatNumberId(r.uangMakan));
+    _extra = TextEditingController(text: r == null || r.extra == 0 ? '' : formatNumberId(r.extra));
+    _tagihan = TextEditingController(text: r == null || r.tagihan == 0 ? '' : formatNumberId(r.tagihan));
   }
 
   @override
@@ -58,6 +70,7 @@ class _FormScreenState extends State<FormScreen> {
     for (final c in [
       _berangkat, _jam, _kembali, _polisi, _pengemudi,
       _kernet, _kmAwal, _kmAkhir, _namaCrew,
+      _uangSaku, _bbm, _uangMakan, _extra, _tagihan,
     ]) {
       c.dispose();
     }
@@ -83,9 +96,25 @@ class _FormScreenState extends State<FormScreen> {
           padding: const EdgeInsets.all(16),
           children: [
             _sectionTitle('Informasi Perjalanan'),
-            _text(_berangkat, 'Hari/Tgl Berangkat', hint: 'mis. Senin, 01/01/2024'),
+            _datePicker(
+              controller: _berangkat,
+              label: 'Hari/Tgl Berangkat',
+              selectedDate: _tglBerangkat,
+              onDateSelected: (d) => setState(() {
+                _tglBerangkat = d;
+                _berangkat.text = DateFormat('EEEE, dd/MM/yyyy', 'id_ID').format(d);
+              }),
+            ),
             _text(_jam, 'Jam Berangkat', hint: 'mis. 08:00', keyboardType: TextInputType.datetime),
-            _text(_kembali, 'Hari/Tgl Kembali', hint: 'mis. Rabu, 03/01/2024'),
+            _datePicker(
+              controller: _kembali,
+              label: 'Hari/Tgl Kembali',
+              selectedDate: _tglKembali,
+              onDateSelected: (d) => setState(() {
+                _tglKembali = d;
+                _kembali.text = DateFormat('EEEE, dd/MM/yyyy', 'id_ID').format(d);
+              }),
+            ),
             _text(_polisi, 'No. Polisi', hint: 'mis. B 1234 XX'),
             _text(_pengemudi, 'Pengemudi', hint: 'Nama sopir'),
             _text(_kernet, 'Kernet', hint: 'Nama kernet/asisten'),
@@ -99,15 +128,14 @@ class _FormScreenState extends State<FormScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            _sectionTitle('A. Rincian Pendapatan'),
-            _itemEditor(_pendapatan),
-            _totalChip('Total Pendapatan', _sum(_pendapatan)),
-            const SizedBox(height: 12),
-            _sectionTitle('B. Rincian Pengeluaran'),
-            _itemEditor(_pengeluaran),
-            _totalChip('Total Pengeluaran', _sum(_pengeluaran)),
+            _sectionTitle('Keuangan'),
+            _rupiahField(_uangSaku, 'Uang Saku'),
+            _rupiahField(_bbm, 'BBM'),
+            _rupiahField(_uangMakan, 'Uang Makan'),
+            _rupiahField(_extra, 'Extra'),
+            _rupiahField(_tagihan, 'Tagihan'),
             const SizedBox(height: 8),
-            _selisihCard(),
+            _sisaCard(),
             const SizedBox(height: 16),
             _sectionTitle('Tanda Tangan'),
             _text(_namaCrew, 'Nama Crew (Pembuat Laporan)', hint: 'Nama lengkap'),
@@ -155,6 +183,41 @@ class _FormScreenState extends State<FormScreen> {
     );
   }
 
+  /// Date picker field — taps open a calendar.
+  Widget _datePicker({
+    required TextEditingController controller,
+    required String label,
+    required DateTime? selectedDate,
+    required ValueChanged<DateTime> onDateSelected,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: TextFormField(
+        controller: controller,
+        readOnly: true,
+        decoration: InputDecoration(
+          labelText: label,
+          hintText: 'Pilih tanggal',
+          border: const OutlineInputBorder(),
+          suffixIcon: const Icon(Icons.calendar_today),
+        ),
+        onTap: () async {
+          final now = DateTime.now();
+          final picked = await showDatePicker(
+            context: context,
+            initialDate: selectedDate ?? now,
+            firstDate: DateTime(2020),
+            lastDate: DateTime(2030),
+            locale: const Locale('id', 'ID'),
+          );
+          if (picked != null) {
+            onDateSelected(picked);
+          }
+        },
+      ),
+    );
+  }
+
   /// Field angka yang otomatis memformat dengan pemisah ribuan.
   Widget _rupiahField(TextEditingController c, String label) {
     return Padding(
@@ -172,91 +235,20 @@ class _FormScreenState extends State<FormScreen> {
     );
   }
 
-  Widget _itemEditor(List<LineItem> list) {
-    return Column(
-      children: [
-        for (int i = 0; i < list.length; i++) ...[
-          _itemRow(list, i),
-          const SizedBox(height: 8),
-        ],
-        Align(
-          alignment: Alignment.centerLeft,
-          child: TextButton.icon(
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Tambah Baris'),
-            onPressed: () => setState(() =>
-                list.add(LineItem(keterangan: '', jumlah: 0))),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _itemRow(List<LineItem> list, int i) {
-    final item = list[i];
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Expanded(
-          flex: 3,
-          child: TextFormField(
-            initialValue: item.keterangan,
-            decoration: const InputDecoration(
-              isDense: true,
-              labelText: 'Keterangan',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (v) => item.keterangan = v,
-          ),
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          flex: 2,
-          child: TextFormField(
-            initialValue: item.jumlah == 0 ? '' : formatNumberId(item.jumlah),
-            keyboardType: TextInputType.number,
-            inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-            decoration: const InputDecoration(
-              isDense: true,
-              labelText: 'Jumlah (Rp)',
-              border: OutlineInputBorder(),
-            ),
-            onChanged: (v) {
-              item.jumlah = parseRupiahInput(v);
-              setState(() {});
-            },
-          ),
-        ),
-        IconButton(
-          tooltip: 'Hapus baris',
-          icon: const Icon(Icons.delete_outline, color: Colors.red),
-          onPressed: list.length <= 1
-              ? null
-              : () => setState(() => list.removeAt(i)),
-        ),
-      ],
-    );
-  }
-
-  Widget _totalChip(String label, int total) => Align(
-        alignment: Alignment.centerRight,
-        child: Chip(
-          label: Text('$label: ${formatRupiah(total)}'),
-          backgroundColor: Colors.grey.shade200,
-        ),
-      );
-
-  Widget _selisihCard() {
-    final p = _sum(_pendapatan);
-    final k = _sum(_pengeluaran);
-    final s = p - k;
-    final positif = s >= 0;
+  Widget _sisaCard() {
+    final uangSaku = parseRupiahInput(_uangSaku.text);
+    final pengeluaran = parseRupiahInput(_bbm.text) +
+        parseRupiahInput(_uangMakan.text) +
+        parseRupiahInput(_extra.text) +
+        parseRupiahInput(_tagihan.text);
+    final sisa = uangSaku - pengeluaran;
+    final positif = sisa >= 0;
     return Card(
       color: positif ? Colors.green.shade50 : Colors.red.shade50,
       child: ListTile(
-        title: Text(positif ? 'SISA (SURPLUS)' : 'DEFISIT'),
+        title: Text(positif ? 'SISA' : 'DEFISIT'),
         trailing: Text(
-          formatRupiah(s),
+          formatRupiah(sisa),
           style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
         ),
       ),
@@ -264,8 +256,6 @@ class _FormScreenState extends State<FormScreen> {
   }
 
   // -------------------------------------------------------------- actions
-  int _sum(List<LineItem> l) => l.fold(0, (s, e) => s + e.jumlah);
-
   Report _buildReport() {
     return Report(
       id: widget.report?.id,
@@ -278,8 +268,11 @@ class _FormScreenState extends State<FormScreen> {
       kernet: _kernet.text.trim(),
       kmAwal: parseRupiahInput(_kmAwal.text),
       kmAkhir: parseRupiahInput(_kmAkhir.text),
-      pendapatan: _pendapatan.where((e) => e.keterangan.isNotEmpty || e.jumlah > 0).toList(),
-      pengeluaran: _pengeluaran.where((e) => e.keterangan.isNotEmpty || e.jumlah > 0).toList(),
+      uangSaku: parseRupiahInput(_uangSaku.text),
+      bbm: parseRupiahInput(_bbm.text),
+      uangMakan: parseRupiahInput(_uangMakan.text),
+      extra: parseRupiahInput(_extra.text),
+      tagihan: parseRupiahInput(_tagihan.text),
       namaCrew: _namaCrew.text.trim(),
     );
   }

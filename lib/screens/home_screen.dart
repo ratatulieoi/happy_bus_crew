@@ -73,7 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   subtitle: Text(
                     '${formatTanggalPendek(r.tanggalBuat)} • '
-                    'Sisa: ${formatRupiah(r.selisih)}',
+                    'Sisa: ${formatRupiah(r.sisa)}',
                   ),
                   trailing: PopupMenuButton<String>(
                     onSelected: (v) => _onMenu(v, r),

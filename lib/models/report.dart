@@ -1,39 +1,8 @@
 /// Model data untuk Laporan Pertanggungjawaban Crew.
 ///
 /// Satu [Report] berisi seluruh field pada form: info header, kilometer,
-/// daftar item pendapatan & pengeluaran, total otomatis, serta data
-/// tanda tangan crew.
-
-/// Satu baris item (pendapatan atau pengeluaran).
-class LineItem {
-  int? id;
-  String keterangan;
-  int jumlah; // dalam Rupiah penuh (mis. 50000)
-
-  LineItem({
-    this.id,
-    required this.keterangan,
-    required this.jumlah,
-  });
-
-  Map<String, dynamic> toMap({int? reportId, required String type}) {
-    return {
-      if (id != null) 'id': id,
-      if (reportId != null) 'report_id': reportId,
-      'type': type, // 'pendapatan' | 'pengeluaran'
-      'keterangan': keterangan,
-      'jumlah': jumlah,
-    };
-  }
-
-  factory LineItem.fromMap(Map<String, dynamic> map) {
-    return LineItem(
-      id: map['id'] as int?,
-      keterangan: map['keterangan'] as String? ?? '',
-      jumlah: map['jumlah'] as int? ?? 0,
-    );
-  }
-}
+/// field keuangan (uang saku, BBM, uang makan, extra, tagihan),
+/// serta data tanda tangan crew.
 
 class Report {
   int? id;
@@ -51,9 +20,12 @@ class Report {
   int kmAwal;
   int kmAkhir;
 
-  // --- Daftar item ---
-  List<LineItem> pendapatan;
-  List<LineItem> pengeluaran;
+  // --- Keuangan ---
+  int uangSaku;
+  int bbm;
+  int uangMakan;
+  int extra;
+  int tagihan;
 
   // --- Tanda tangan ---
   String namaCrew; // nama pembuat laporan (penanda tangan)
@@ -69,21 +41,19 @@ class Report {
     required this.kernet,
     required this.kmAwal,
     required this.kmAkhir,
-    required this.pendapatan,
-    required this.pengeluaran,
+    required this.uangSaku,
+    required this.bbm,
+    required this.uangMakan,
+    required this.extra,
+    required this.tagihan,
     required this.namaCrew,
   }) : tanggalBuat = tanggalBuat ?? DateTime.now();
 
-  /// Total seluruh baris pendapatan.
-  int get totalPendapatan =>
-      pendapatan.fold(0, (sum, e) => sum + e.jumlah);
+  /// Total pengeluaran = BBM + Uang Makan + Extra + Tagihan.
+  int get totalPengeluaran => bbm + uangMakan + extra + tagihan;
 
-  /// Total seluruh baris pengeluaran.
-  int get totalPengeluaran =>
-      pengeluaran.fold(0, (sum, e) => sum + e.jumlah);
-
-  /// Selisih = pendapatan - pengeluaran.
-  int get selisih => totalPendapatan - totalPengeluaran;
+  /// Sisa = Uang Saku - total pengeluaran.
+  int get sisa => uangSaku - totalPengeluaran;
 
   /// Jumlah KM yang ditempuh.
   int get jarakTempuh => kmAkhir - kmAwal;
@@ -104,15 +74,16 @@ class Report {
       'kernet': kernet,
       'km_awal': kmAwal,
       'km_akhir': kmAkhir,
+      'uang_saku': uangSaku,
+      'bbm': bbm,
+      'uang_makan': uangMakan,
+      'extra': extra,
+      'tagihan': tagihan,
       'nama_crew': namaCrew,
     };
   }
 
-  factory Report.fromMap(
-    Map<String, dynamic> map, {
-    List<LineItem> pendapatan = const [],
-    List<LineItem> pengeluaran = const [],
-  }) {
+  factory Report.fromMap(Map<String, dynamic> map) {
     return Report(
       id: map['id'] as int?,
       tanggalBuat: DateTime.tryParse(map['tanggal_buat'] as String? ?? '') ??
@@ -125,9 +96,12 @@ class Report {
       kernet: map['kernet'] as String? ?? '',
       kmAwal: map['km_awal'] as int? ?? 0,
       kmAkhir: map['km_akhir'] as int? ?? 0,
+      uangSaku: map['uang_saku'] as int? ?? 0,
+      bbm: map['bbm'] as int? ?? 0,
+      uangMakan: map['uang_makan'] as int? ?? 0,
+      extra: map['extra'] as int? ?? 0,
+      tagihan: map['tagihan'] as int? ?? 0,
       namaCrew: map['nama_crew'] as String? ?? '',
-      pendapatan: List<LineItem>.from(pendapatan),
-      pengeluaran: List<LineItem>.from(pengeluaran),
     );
   }
 
@@ -143,8 +117,11 @@ class Report {
     String? kernet,
     int? kmAwal,
     int? kmAkhir,
-    List<LineItem>? pendapatan,
-    List<LineItem>? pengeluaran,
+    int? uangSaku,
+    int? bbm,
+    int? uangMakan,
+    int? extra,
+    int? tagihan,
     String? namaCrew,
   }) {
     return Report(
@@ -158,8 +135,11 @@ class Report {
       kernet: kernet ?? this.kernet,
       kmAwal: kmAwal ?? this.kmAwal,
       kmAkhir: kmAkhir ?? this.kmAkhir,
-      pendapatan: pendapatan ?? this.pendapatan,
-      pengeluaran: pengeluaran ?? this.pengeluaran,
+      uangSaku: uangSaku ?? this.uangSaku,
+      bbm: bbm ?? this.bbm,
+      uangMakan: uangMakan ?? this.uangMakan,
+      extra: extra ?? this.extra,
+      tagihan: tagihan ?? this.tagihan,
       namaCrew: namaCrew ?? this.namaCrew,
     );
   }
