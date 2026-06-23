@@ -11,6 +11,17 @@ subprojects {
 }
 subprojects {
     project.evaluationDependsOn(":app")
+    afterEvaluate {
+        if (project.plugins.hasPlugin("com.android.library")) {
+            project.android {
+                if (it.hasProperty('compileSdk')) {
+                    it.compileSdk = 35
+                } else {
+                    it.compileSdkVersion 35
+                }
+            }
+        }
+    }
 }
 
 tasks.register("clean", Delete) {
