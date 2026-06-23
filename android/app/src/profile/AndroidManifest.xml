@@ -1,0 +1,5 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- The INTERNET permission is required for profile mode so that
+         Flutter Analytics can call the default Crashlytics endpoint. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
+</manifest>

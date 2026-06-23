@@ -1,0 +1,7 @@
+## Template — salin menjadi `local.properties` lalu isi path Flutter SDK Anda.
+## Contoh:
+##   sdk.dir=/home/user/Android/Sdk
+##   flutter.sdk=/home/user/flutter
+sdk.dir=/path/to/Android/Sdk
+flutter.sdk=/path/to/flutter
+flutter.buildMode=release
