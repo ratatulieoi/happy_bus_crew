@@ -12,8 +12,8 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(":app")
     // Force compileSdk 35 on all Android library plugins (e.g. printing)
-    plugins.withId(com.android.build.gradle.LibraryPlugin) {
-        android.compileSdkVersion 35
+    plugins.withId('com.android.library') {
+        android.compileSdk = 35
     }
 }
 
