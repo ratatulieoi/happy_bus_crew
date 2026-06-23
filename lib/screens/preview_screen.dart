@@ -71,7 +71,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
             build: (format) => snap.data!.save(),
             canChangeOrientation: false,
             canChangePageFormat: false,
-            previewController: PreviewController(),
+
           );
         },
       ),
