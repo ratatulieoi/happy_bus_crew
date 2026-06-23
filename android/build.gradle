@@ -12,8 +12,17 @@ subprojects {
 subprojects {
     project.evaluationDependsOn(":app")
     // Force compileSdk 35 on all Android library plugins (e.g. printing)
-    plugins.withId('com.android.library') {
-        android.compileSdk = 35
+    def forceCompileSdk = {
+        plugins.withId('com.android.library') {
+            android.compileSdk = 35
+        }
+    }
+    if (project.state.executed) {
+        forceCompileSdk()
+    } else {
+        project.afterEvaluate {
+            forceCompileSdk()
+        }
     }
 }
 
