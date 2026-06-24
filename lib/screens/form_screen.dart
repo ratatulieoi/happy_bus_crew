@@ -63,6 +63,7 @@ class _FormScreenState extends State<FormScreen> {
     _uangMakan = TextEditingController(text: r == null || r.uangMakan == 0 ? '' : formatNumberId(r.uangMakan));
     _extra = TextEditingController(text: r == null || r.extra == 0 ? '' : formatNumberId(r.extra));
     _tagihan = TextEditingController(text: r == null || r.tagihan == 0 ? '' : formatNumberId(r.tagihan));
+    _loadBusInfo();
   }
 
   @override
@@ -115,7 +116,7 @@ class _FormScreenState extends State<FormScreen> {
                 _kembali.text = DateFormat('EEEE, dd/MM/yyyy', 'id_ID').format(d);
               }),
             ),
-            _text(_polisi, 'No. Polisi', hint: 'mis. B 1234 XX'),
+            _text(_polisi, 'No. Polisi', hint: 'mis. B 1234 XX', readOnly: true),
             _text(_pengemudi, 'Pengemudi', hint: 'Nama sopir'),
             _text(_kernet, 'Kernet', hint: 'Nama kernet/asisten'),
             const SizedBox(height: 8),
@@ -165,12 +166,13 @@ class _FormScreenState extends State<FormScreen> {
       );
 
   Widget _text(TextEditingController c, String label,
-      {String? hint, TextInputType? keyboardType, bool required = false}) {
+      {String? hint, TextInputType? keyboardType, bool required = false, bool readOnly = false}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextFormField(
         controller: c,
         keyboardType: keyboardType,
+        readOnly: readOnly,
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
@@ -292,6 +294,28 @@ class _FormScreenState extends State<FormScreen> {
       Fluttertoast.showToast(msg: 'Gagal menyimpan: $e');
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _loadBusInfo() async {
+    if (!_isEdit) {
+      final db = DatabaseHelper.instance;
+      final selectedIndexStr = await db.getSetting('selected_bus_index');
+      if (selectedIndexStr != null) {
+        final index = int.parse(selectedIndexStr);
+        final plate = await db.getSetting('bus_${index}_plate');
+        if (plate != null && mounted) {
+          setState(() {
+            _polisi.text = plate;
+          });
+          final latestKm = await db.getLatestKmForPlate(plate);
+          if (latestKm > 0 && mounted) {
+            setState(() {
+              _kmAwal.text = formatNumberId(latestKm);
+            });
+          }
+        }
+      }
     }
   }
 

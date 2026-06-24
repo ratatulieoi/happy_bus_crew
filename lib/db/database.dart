@@ -16,7 +16,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       p.join(dbPath, 'happy_bus.db'),
-      version: 2,
+      version: 3,
       onCreate: (db, v) async {
         await db.execute('''
           CREATE TABLE reports (
@@ -38,9 +38,14 @@ class DatabaseHelper {
             nama_crew          TEXT    NOT NULL DEFAULT ''
           )
         ''');
+        await db.execute('''
+          CREATE TABLE settings (
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+          )
+        ''');
       },
       onUpgrade: (db, oldVersion, newVersion) async {
-        // Migration: drop old tables and recreate
         if (oldVersion < 2) {
           await db.execute('DROP TABLE IF EXISTS line_items');
           await db.execute('DROP TABLE IF EXISTS reports');
@@ -62,6 +67,14 @@ class DatabaseHelper {
               extra              INTEGER NOT NULL DEFAULT 0,
               tagihan            INTEGER NOT NULL DEFAULT 0,
               nama_crew          TEXT    NOT NULL DEFAULT ''
+            )
+          ''');
+        }
+        if (oldVersion < 3) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS settings (
+              key TEXT PRIMARY KEY,
+              value TEXT NOT NULL
             )
           ''');
         }
@@ -102,5 +115,36 @@ class DatabaseHelper {
     final database = await db;
     final rows = await database.query('reports', orderBy: 'tanggal_buat DESC');
     return rows.map(Report.fromMap).toList();
+  }
+
+  /// Ambil nilai setting berdasarkan key.
+  Future<String?> getSetting(String key) async {
+    final database = await db;
+    final rows = await database.query('settings', where: 'key = ?', whereArgs: [key]);
+    if (rows.isEmpty) return null;
+    return rows.first['value'] as String?;
+  }
+
+  /// Simpan nilai setting.
+  Future<void> setSetting(String key, String value) async {
+    final database = await db;
+    await database.insert(
+      'settings',
+      {'key': key, 'value': value},
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  /// Ambil KM terakhir dari laporan yang terdaftar untuk plat tertentu.
+  Future<int> getLatestKmForPlate(String plate) async {
+    final database = await db;
+    final result = await database.rawQuery(
+      'SELECT MAX(km_akhir) as max_km FROM reports WHERE no_polisi = ?',
+      [plate],
+    );
+    if (result.isEmpty || result.first['max_km'] == null) {
+      return 0;
+    }
+    return result.first['max_km'] as int;
   }
 }
