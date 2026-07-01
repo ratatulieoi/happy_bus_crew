@@ -98,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: const [
-            Text('Happy Bus — Laporan Crew', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            Text('Happy Group — Laporan Crew', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
             Text('Versi 1.1.0', style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal)),
           ],
         ),

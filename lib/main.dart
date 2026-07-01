@@ -16,7 +16,7 @@ class HappyBusApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Happy Bus — Laporan Crew',
+      title: 'Happy Group — Laporan Crew',
       debugShowCheckedModeBanner: false,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,

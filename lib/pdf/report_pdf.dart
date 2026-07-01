@@ -8,7 +8,7 @@ import '../models/report.dart';
 import '../utils/format.dart';
 
 /// Membangun dokumen PDF A4 portrait yang mereproduksi tampilan
-/// "Laporan Pertanggungjawaban Crew — Happy Bus" sesuai contoh.
+/// "Laporan Pertanggungjawaban Crew — Happy Group" sesuai contoh.
 class ReportPdfBuilder {
   static const _pageFormat = PdfPageFormat.a4;
 
@@ -60,7 +60,7 @@ class ReportPdfBuilder {
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
             pw.Text(
-              'HAPPY BUS',
+              'HAPPY GROUP',
               style: pw.TextStyle(
                   fontSize: 20, fontWeight: pw.FontWeight.bold, color: _black),
             ),
