@@ -16,7 +16,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       p.join(dbPath, 'happy_bus.db'),
-      version: 4,
+      version: 5,
       onCreate: (db, v) async {
         await db.execute('''
           CREATE TABLE reports (
@@ -35,7 +35,8 @@ class DatabaseHelper {
             uang_makan         INTEGER NOT NULL DEFAULT 0,
             extra              INTEGER NOT NULL DEFAULT 0,
             tagihan            INTEGER NOT NULL DEFAULT 0,
-            nama_crew          TEXT    NOT NULL DEFAULT ''
+            nama_crew          TEXT    NOT NULL DEFAULT '',
+            catatan            TEXT    NOT NULL DEFAULT ''
           )
         ''');
         await db.execute('''
@@ -95,6 +96,9 @@ class DatabaseHelper {
               FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
             )
           ''');
+        }
+        if (oldVersion < 5) {
+          await db.execute("ALTER TABLE reports ADD COLUMN catatan TEXT NOT NULL DEFAULT ''");
         }
       },
     );

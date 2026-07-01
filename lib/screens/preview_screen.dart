@@ -39,9 +39,11 @@ class _PreviewScreenState extends State<PreviewScreen> {
     );
   }
 
+  static const _appVersion = '1.1.0';
+
   String get _fileBase {
     final t = widget.report.tanggalBuat;
-    return 'Laporan_Crew_${t.year}${t.month.toString().padLeft(2, '0')}${t.day.toString().padLeft(2, '0')}';
+    return 'Laporan_Crew_v${_appVersion}_${t.year}${t.month.toString().padLeft(2, '0')}${t.day.toString().padLeft(2, '0')}';
   }
 
   @override
@@ -116,16 +118,28 @@ class _PreviewScreenState extends State<PreviewScreen> {
     try {
       final doc = await _docFuture;
       final bytes = await doc.save();
-      Directory? dir = await getExternalStorageDirectory();
-      dir ??= await getApplicationDocumentsDirectory();
-      // Sub-folder sederhana biar mudah ditemukan pengguna.
-      final out = Directory(p.join(dir.path, 'HappyBus'));
+      // Simpan ke folder Download bawaan HP
+      final downloadDir = Directory('/storage/emulated/0/Download');
+      final out = Directory(p.join(downloadDir.path, 'HappyGroup'));
       if (!out.existsSync()) out.createSync(recursive: true);
       final file = File(p.join(out.path, '$_fileBase.pdf'));
       await file.writeAsBytes(bytes);
-      Fluttertoast.showToast(msg: 'Tersimpan: ${file.path}');
+      Fluttertoast.showToast(msg: 'Tersimpan di Download/HappyGroup/');
     } catch (e) {
-      Fluttertoast.showToast(msg: 'Gagal menyimpan: $e');
+      // Fallback ke app directory jika gagal
+      try {
+        final doc = await _docFuture;
+        final bytes = await doc.save();
+        Directory? dir = await getExternalStorageDirectory();
+        dir ??= await getApplicationDocumentsDirectory();
+        final out = Directory(p.join(dir.path, 'HappyGroup'));
+        if (!out.existsSync()) out.createSync(recursive: true);
+        final file = File(p.join(out.path, '$_fileBase.pdf'));
+        await file.writeAsBytes(bytes);
+        Fluttertoast.showToast(msg: 'Tersimpan: ${file.path}');
+      } catch (e2) {
+        Fluttertoast.showToast(msg: 'Gagal menyimpan: $e2');
+      }
     }
   }
 }

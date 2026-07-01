@@ -35,6 +35,7 @@ class _FormScreenState extends State<FormScreen> {
   late final TextEditingController _kmAwal;
   late final TextEditingController _kmAkhir;
   late final TextEditingController _namaCrew;
+  late final TextEditingController _catatan;
 
   // Keuangan
   late final TextEditingController _uangSaku;
@@ -67,6 +68,7 @@ class _FormScreenState extends State<FormScreen> {
     _kmAwal = TextEditingController(text: r == null ? '' : formatNumberId(r.kmAwal));
     _kmAkhir = TextEditingController(text: r == null ? '' : formatNumberId(r.kmAkhir));
     _namaCrew = TextEditingController(text: r?.namaCrew ?? '');
+    _catatan = TextEditingController(text: r?.catatan ?? '');
     _uangSaku = TextEditingController(text: r == null || r.uangSaku == 0 ? '' : formatNumberId(r.uangSaku));
     _bbm = TextEditingController(text: r == null || r.bbm == 0 ? '' : formatNumberId(r.bbm));
     _uangMakan = TextEditingController(text: r == null || r.uangMakan == 0 ? '' : formatNumberId(r.uangMakan));
@@ -80,7 +82,7 @@ class _FormScreenState extends State<FormScreen> {
   void dispose() {
     for (final c in [
       _berangkat, _jam, _kembali, _polisi, _pengemudi,
-      _kernet, _kmAwal, _kmAkhir, _namaCrew,
+      _kernet, _kmAwal, _kmAkhir, _namaCrew, _catatan,
       _uangSaku, _bbm, _uangMakan, _extra, _tagihan,
     ]) {
       c.dispose();
@@ -151,6 +153,9 @@ class _FormScreenState extends State<FormScreen> {
             _sectionTitle('Tanda Tangan'),
             _text(_namaCrew, 'Nama Crew (Pembuat Laporan)', hint: 'Nama lengkap'),
             const SizedBox(height: 16),
+            _sectionTitle('Catatan'),
+            _text(_catatan, 'Catatan (Opsional)', hint: 'Catatan tambahan...', maxLines: 3),
+            const SizedBox(height: 16),
             _sectionTitle('Lampiran Struk BBM'),
             _attachmentSection(),
             const SizedBox(height: 24),
@@ -179,13 +184,14 @@ class _FormScreenState extends State<FormScreen> {
       );
 
   Widget _text(TextEditingController c, String label,
-      {String? hint, TextInputType? keyboardType, bool required = false, bool readOnly = false}) {
+      {String? hint, TextInputType? keyboardType, bool required = false, bool readOnly = false, int maxLines = 1}) {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: TextFormField(
         controller: c,
         keyboardType: keyboardType,
         readOnly: readOnly,
+        maxLines: maxLines,
         decoration: InputDecoration(
           labelText: label,
           hintText: hint,
@@ -240,7 +246,7 @@ class _FormScreenState extends State<FormScreen> {
       child: TextFormField(
         controller: c,
         keyboardType: TextInputType.number,
-        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+        inputFormatters: [_ThousandsSeparatorFormatter()],
         decoration: InputDecoration(
           labelText: label,
           border: const OutlineInputBorder(),
@@ -408,6 +414,7 @@ class _FormScreenState extends State<FormScreen> {
       extra: parseRupiahInput(_extra.text),
       tagihan: parseRupiahInput(_tagihan.text),
       namaCrew: _namaCrew.text.trim(),
+      catatan: _catatan.text.trim(),
     );
   }
 
@@ -429,9 +436,13 @@ class _FormScreenState extends State<FormScreen> {
       final attachDir = Directory(p.join(appDir.path, 'attachments', '$reportId'));
       if (!attachDir.existsSync()) attachDir.createSync(recursive: true);
       for (int i = 0; i < _attachments.length; i++) {
-        final ext = p.extension(_attachments[i].path);
+        final src = _attachments[i];
+        final ext = p.extension(src.path);
         final dest = File(p.join(attachDir.path, 'struk_${i + 1}$ext'));
-        await _attachments[i].copy(dest.path);
+        // Jangan copy jika source dan dest sama (file sudah tersimpan)
+        if (src.path != dest.path) {
+          await src.copy(dest.path);
+        }
         await DatabaseHelper.instance.insertAttachment(reportId, dest.path);
       }
       Fluttertoast.showToast(msg: 'Laporan tersimpan');
@@ -480,6 +491,35 @@ class _FormScreenState extends State<FormScreen> {
           attachmentImages: imgBytes,
         ),
       ),
+    );
+  }
+}
+
+/// Formatter yang otomatis menambahkan titik pemisah ribuan saat mengetik angka.
+class _ThousandsSeparatorFormatter extends TextInputFormatter {
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    // Hapus semua non-digit
+    final digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digitsOnly.isEmpty) {
+      return newValue.copyWith(text: '', selection: const TextSelection.collapsed(offset: 0));
+    }
+
+    // Format dengan pemisah titik ribuan
+    final result = StringBuffer();
+    for (int i = 0; i < digitsOnly.length; i++) {
+      if (i > 0 && (digitsOnly.length - i) % 3 == 0) {
+        result.write('.');
+      }
+      result.write(digitsOnly[i]);
+    }
+    final formatted = result.toString();
+    return TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
     );
   }
 }

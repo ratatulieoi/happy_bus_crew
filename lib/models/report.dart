@@ -30,6 +30,9 @@ class Report {
   // --- Tanda tangan ---
   String namaCrew; // nama pembuat laporan (penanda tangan)
 
+  // --- Catatan (opsional) ---
+  String catatan;
+
   Report({
     this.id,
     DateTime? tanggalBuat,
@@ -47,6 +50,7 @@ class Report {
     required this.extra,
     required this.tagihan,
     required this.namaCrew,
+    this.catatan = '',
   }) : tanggalBuat = tanggalBuat ?? DateTime.now();
 
   /// Total pengeluaran = BBM + Uang Makan + Extra + Tagihan.
@@ -80,6 +84,7 @@ class Report {
       'extra': extra,
       'tagihan': tagihan,
       'nama_crew': namaCrew,
+      'catatan': catatan,
     };
   }
 
@@ -102,6 +107,7 @@ class Report {
       extra: map['extra'] as int? ?? 0,
       tagihan: map['tagihan'] as int? ?? 0,
       namaCrew: map['nama_crew'] as String? ?? '',
+      catatan: map['catatan'] as String? ?? '',
     );
   }
 
@@ -123,6 +129,7 @@ class Report {
     int? extra,
     int? tagihan,
     String? namaCrew,
+    String? catatan,
   }) {
     return Report(
       id: id ?? this.id,
@@ -141,6 +148,7 @@ class Report {
       extra: extra ?? this.extra,
       tagihan: tagihan ?? this.tagihan,
       namaCrew: namaCrew ?? this.namaCrew,
+      catatan: catatan ?? this.catatan,
     );
   }
 }

@@ -44,6 +44,21 @@ class ReportPdfBuilder {
           _buildFinanceTable(r),
           pw.SizedBox(height: 12),
           _buildSummary(r),
+          if (r.catatan.isNotEmpty) ...[
+            pw.SizedBox(height: 14),
+            _buildSectionTitle('Catatan'),
+            pw.Container(
+              width: double.infinity,
+              padding: const pw.EdgeInsets.all(10),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: _line),
+              ),
+              child: pw.Text(
+                r.catatan,
+                style: const pw.TextStyle(fontSize: 10),
+              ),
+            ),
+          ],
           pw.SizedBox(height: 24),
           _buildSignature(r),
         ],
