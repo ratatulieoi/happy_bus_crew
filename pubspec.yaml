@@ -32,6 +32,9 @@ dependencies:
   # OS share / file saving helpers
   fluttertoast: ^8.2.6
 
+  # Camera / gallery image picker
+  image_picker: ^1.0.7
+
 dev_dependencies:
   flutter_test:
     sdk: flutter

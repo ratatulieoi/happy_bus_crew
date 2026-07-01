@@ -1,3 +1,6 @@
+import 'dart:io';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:fluttertoast/fluttertoast.dart';
 
@@ -463,9 +466,26 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _openPreview(Report r) async {
+    // Load lampiran dari database
+    List<Uint8List> attachmentImages = [];
+    if (r.id != null) {
+      final paths = await DatabaseHelper.instance.getAttachments(r.id!);
+      for (final path in paths) {
+        final file = File(path);
+        if (await file.exists()) {
+          attachmentImages.add(await file.readAsBytes());
+        }
+      }
+    }
+    if (!mounted) return;
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => PreviewScreen(report: r)),
+      MaterialPageRoute(
+        builder: (_) => PreviewScreen(
+          report: r,
+          attachmentImages: attachmentImages,
+        ),
+      ),
     );
   }
 

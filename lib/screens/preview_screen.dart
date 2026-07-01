@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -15,7 +16,12 @@ import '../utils/format.dart';
 /// Pratinjau PDF + tombol simpan/bagikan/cetak.
 class PreviewScreen extends StatefulWidget {
   final Report report;
-  const PreviewScreen({super.key, required this.report});
+  final List<Uint8List> attachmentImages;
+  const PreviewScreen({
+    super.key,
+    required this.report,
+    this.attachmentImages = const [],
+  });
 
   @override
   State<PreviewScreen> createState() => _PreviewScreenState();
@@ -27,7 +33,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
   @override
   void initState() {
     super.initState();
-    _docFuture = ReportPdfBuilder.build(widget.report);
+    _docFuture = ReportPdfBuilder.build(
+      widget.report,
+      attachmentImages: widget.attachmentImages,
+    );
   }
 
   String get _fileBase {

@@ -16,7 +16,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       p.join(dbPath, 'happy_bus.db'),
-      version: 3,
+      version: 4,
       onCreate: (db, v) async {
         await db.execute('''
           CREATE TABLE reports (
@@ -42,6 +42,14 @@ class DatabaseHelper {
           CREATE TABLE settings (
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
+          )
+        ''');
+        await db.execute('''
+          CREATE TABLE report_attachments (
+            id        INTEGER PRIMARY KEY AUTOINCREMENT,
+            report_id INTEGER NOT NULL,
+            file_path TEXT    NOT NULL,
+            FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
           )
         ''');
       },
@@ -78,6 +86,16 @@ class DatabaseHelper {
             )
           ''');
         }
+        if (oldVersion < 4) {
+          await db.execute('''
+            CREATE TABLE IF NOT EXISTS report_attachments (
+              id        INTEGER PRIMARY KEY AUTOINCREMENT,
+              report_id INTEGER NOT NULL,
+              file_path TEXT    NOT NULL,
+              FOREIGN KEY (report_id) REFERENCES reports(id) ON DELETE CASCADE
+            )
+          ''');
+        }
       },
     );
     return _db!;
@@ -96,9 +114,10 @@ class DatabaseHelper {
     await database.update('reports', r.toMap(), where: 'id = ?', whereArgs: [r.id]);
   }
 
-  /// Hapus laporan.
+  /// Hapus laporan beserta lampirannya.
   Future<void> deleteReport(int id) async {
     final database = await db;
+    await database.delete('report_attachments', where: 'report_id = ?', whereArgs: [id]);
     await database.delete('reports', where: 'id = ?', whereArgs: [id]);
   }
 
@@ -146,5 +165,34 @@ class DatabaseHelper {
       return 0;
     }
     return result.first['max_km'] as int;
+  }
+
+  // ------------------------------------------------ Attachment helpers
+
+  /// Simpan path lampiran foto untuk sebuah laporan.
+  Future<void> insertAttachment(int reportId, String filePath) async {
+    final database = await db;
+    await database.insert('report_attachments', {
+      'report_id': reportId,
+      'file_path': filePath,
+    });
+  }
+
+  /// Ambil semua path lampiran untuk sebuah laporan.
+  Future<List<String>> getAttachments(int reportId) async {
+    final database = await db;
+    final rows = await database.query(
+      'report_attachments',
+      where: 'report_id = ?',
+      whereArgs: [reportId],
+      orderBy: 'id ASC',
+    );
+    return rows.map((r) => r['file_path'] as String).toList();
+  }
+
+  /// Hapus semua lampiran untuk sebuah laporan.
+  Future<void> deleteAttachments(int reportId) async {
+    final database = await db;
+    await database.delete('report_attachments', where: 'report_id = ?', whereArgs: [reportId]);
   }
 }

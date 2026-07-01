@@ -20,7 +20,12 @@ class ReportPdfBuilder {
 
   /// Membuat [pw.Document] dari sebuah [Report].
   /// [logoBytes] opsional; bila null akan memuat aset default.
-  static Future<pw.Document> build(Report r, {Uint8List? logoBytes}) async {
+  /// [attachmentImages] daftar bytes gambar lampiran (struk, dll).
+  static Future<pw.Document> build(
+    Report r, {
+    Uint8List? logoBytes,
+    List<Uint8List> attachmentImages = const [],
+  }) async {
     final logo = logoBytes ?? await _loadLogo();
 
     final doc = pw.Document();
@@ -44,6 +49,44 @@ class ReportPdfBuilder {
         ],
       ),
     );
+
+    // Lampiran: setiap gambar di halaman baru
+    for (int i = 0; i < attachmentImages.length; i++) {
+      final imgBytes = attachmentImages[i];
+      if (imgBytes.isEmpty) continue;
+      doc.addPage(
+        pw.Page(
+          pageFormat: _pageFormat,
+          margin: const pw.EdgeInsets.all(40),
+          build: (ctx) => pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                'Lampiran ${i + 1}',
+                style: pw.TextStyle(
+                  fontSize: 14,
+                  fontWeight: pw.FontWeight.bold,
+                ),
+              ),
+              pw.SizedBox(height: 8),
+              pw.Text(
+                'Struk Pembelian Bensin',
+                style: pw.TextStyle(fontSize: 10, color: _gray),
+              ),
+              pw.SizedBox(height: 12),
+              pw.Expanded(
+                child: pw.Center(
+                  child: pw.Image(
+                    pw.MemoryImage(imgBytes),
+                    fit: pw.BoxFit.contain,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
 
     return doc;
   }

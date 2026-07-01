@@ -1,7 +1,12 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:fluttertoast/fluttertoast.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
+import 'package:path/path.dart' as p;
+import 'package:path_provider/path_provider.dart';
 
 import '../db/database.dart';
 import '../models/report.dart';
@@ -45,6 +50,10 @@ class _FormScreenState extends State<FormScreen> {
   bool _saving = false;
   bool get _isEdit => widget.report != null;
 
+  // Lampiran foto struk
+  final List<File> _attachments = [];
+  final _picker = ImagePicker();
+
   @override
   void initState() {
     super.initState();
@@ -64,6 +73,7 @@ class _FormScreenState extends State<FormScreen> {
     _extra = TextEditingController(text: r == null || r.extra == 0 ? '' : formatNumberId(r.extra));
     _tagihan = TextEditingController(text: r == null || r.tagihan == 0 ? '' : formatNumberId(r.tagihan));
     _loadBusInfo();
+    _loadExistingAttachments();
   }
 
   @override
@@ -140,6 +150,9 @@ class _FormScreenState extends State<FormScreen> {
             const SizedBox(height: 16),
             _sectionTitle('Tanda Tangan'),
             _text(_namaCrew, 'Nama Crew (Pembuat Laporan)', hint: 'Nama lengkap'),
+            const SizedBox(height: 16),
+            _sectionTitle('Lampiran Struk BBM'),
+            _attachmentSection(),
             const SizedBox(height: 24),
             FilledButton.icon(
               icon: const Icon(Icons.save_outlined),
@@ -257,6 +270,125 @@ class _FormScreenState extends State<FormScreen> {
     );
   }
 
+  Widget _attachmentSection() {
+    return Column(
+      children: [
+        if (_attachments.isNotEmpty)
+          SizedBox(
+            height: 120,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              itemCount: _attachments.length,
+              separatorBuilder: (_, __) => const SizedBox(width: 8),
+              itemBuilder: (context, i) {
+                return Stack(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                        _attachments[i],
+                        width: 100,
+                        height: 120,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    Positioned(
+                      top: 2,
+                      right: 2,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _attachments.removeAt(i)),
+                        child: Container(
+                          decoration: const BoxDecoration(
+                            color: Colors.red,
+                            shape: BoxShape.circle,
+                          ),
+                          padding: const EdgeInsets.all(4),
+                          child: const Icon(Icons.close, size: 14, color: Colors.white),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 4,
+                      left: 4,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Colors.black54,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          '${i + 1}',
+                          style: const TextStyle(color: Colors.white, fontSize: 11),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.camera_alt_outlined),
+                label: const Text('Kamera'),
+                onPressed: () => _pickImage(ImageSource.camera),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                icon: const Icon(Icons.photo_library_outlined),
+                label: const Text('Galeri'),
+                onPressed: () => _pickImage(ImageSource.gallery),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickImage(ImageSource source) async {
+    try {
+      if (source == ImageSource.gallery) {
+        final picked = await _picker.pickMultiImage(imageQuality: 85);
+        if (picked.isNotEmpty) {
+          setState(() {
+            _attachments.addAll(picked.map((x) => File(x.path)));
+          });
+        }
+      } else {
+        final picked = await _picker.pickImage(source: source, imageQuality: 85);
+        if (picked != null) {
+          setState(() {
+            _attachments.add(File(picked.path));
+          });
+        }
+      }
+    } catch (e) {
+      Fluttertoast.showToast(msg: 'Gagal mengambil foto: $e');
+    }
+  }
+
+  Future<void> _loadExistingAttachments() async {
+    if (_isEdit && widget.report?.id != null) {
+      final paths = await DatabaseHelper.instance.getAttachments(widget.report!.id!);
+      final files = <File>[];
+      for (final path in paths) {
+        final f = File(path);
+        if (await f.exists()) files.add(f);
+      }
+      if (mounted && files.isNotEmpty) {
+        setState(() {
+          _attachments.addAll(files);
+        });
+      }
+    }
+  }
+
   // -------------------------------------------------------------- actions
   Report _buildReport() {
     return Report(
@@ -283,10 +415,24 @@ class _FormScreenState extends State<FormScreen> {
     setState(() => _saving = true);
     try {
       final r = _buildReport();
+      int reportId;
       if (_isEdit) {
         await DatabaseHelper.instance.updateReport(r);
+        reportId = r.id!;
+        // Hapus lampiran lama, simpan ulang
+        await DatabaseHelper.instance.deleteAttachments(reportId);
       } else {
-        await DatabaseHelper.instance.insertReport(r);
+        reportId = await DatabaseHelper.instance.insertReport(r);
+      }
+      // Simpan lampiran ke storage dan database
+      final appDir = await getApplicationDocumentsDirectory();
+      final attachDir = Directory(p.join(appDir.path, 'attachments', '$reportId'));
+      if (!attachDir.existsSync()) attachDir.createSync(recursive: true);
+      for (int i = 0; i < _attachments.length; i++) {
+        final ext = p.extension(_attachments[i].path);
+        final dest = File(p.join(attachDir.path, 'struk_${i + 1}$ext'));
+        await _attachments[i].copy(dest.path);
+        await DatabaseHelper.instance.insertAttachment(reportId, dest.path);
       }
       Fluttertoast.showToast(msg: 'Laporan tersimpan');
       if (mounted) Navigator.pop(context, true);
@@ -322,9 +468,18 @@ class _FormScreenState extends State<FormScreen> {
   Future<void> _onPreview() async {
     // Pratinjau langsung tanpa wajib menyimpan.
     final r = _buildReport();
+    final imgBytes = <Uint8List>[];
+    for (final f in _attachments) {
+      imgBytes.add(await f.readAsBytes());
+    }
     await Navigator.push(
       context,
-      MaterialPageRoute(builder: (_) => PreviewScreen(report: r)),
+      MaterialPageRoute(
+        builder: (_) => PreviewScreen(
+          report: r,
+          attachmentImages: imgBytes,
+        ),
+      ),
     );
   }
 }
