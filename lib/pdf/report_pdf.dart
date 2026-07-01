@@ -50,28 +50,8 @@ class ReportPdfBuilder {
 
   // ---------------------------------------------------------------- header
   static pw.Widget _buildHeader(Uint8List logo) {
-    return pw.Row(
-      crossAxisAlignment: pw.CrossAxisAlignment.center,
-      children: [
-        if (logo.isNotEmpty)
-          pw.Image(pw.MemoryImage(logo), width: 46, height: 46),
-        pw.SizedBox(width: 10),
-        pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Text(
-              'HAPPY GROUP',
-              style: pw.TextStyle(
-                  fontSize: 20, fontWeight: pw.FontWeight.bold, color: _black),
-            ),
-            pw.Text(
-              'Perusahaan PO Bus',
-              style: pw.TextStyle(fontSize: 9, color: _gray),
-            ),
-          ],
-        ),
-      ],
-    );
+    if (logo.isEmpty) return pw.SizedBox();
+    return pw.Image(pw.MemoryImage(logo), height: 50);
   }
 
   static pw.Widget _buildTitle() {
