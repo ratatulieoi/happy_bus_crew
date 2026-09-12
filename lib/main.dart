@@ -3,6 +3,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
 import 'screens/home_screen.dart';
+import 'ui/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -27,20 +28,8 @@ class HappyBusApp extends StatelessWidget {
         Locale('id', 'ID'),
         Locale('en', 'US'),
       ],
-      theme: ThemeData(
-        useMaterial3: true,
-        colorSchemeSeed: const Color(0xFF1E88E5),
-        appBarTheme: const AppBarTheme(
-          centerTitle: false,
-          foregroundColor: Colors.white,
-          backgroundColor: Color(0xFF1E88E5),
-        ),
-        filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            minimumSize: const Size.fromHeight(48),
-          ),
-        ),
-      ),
+      locale: const Locale('id', 'ID'),
+      theme: buildAppTheme(),
       home: const HomeScreen(),
     );
   }

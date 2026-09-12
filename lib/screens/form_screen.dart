@@ -2,19 +2,17 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:fluttertoast/fluttertoast.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
-import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 
 import '../db/database.dart';
 import '../models/report.dart';
+import '../services/report_storage.dart';
+import '../ui/app_theme.dart';
+import '../ui/components.dart';
 import '../utils/format.dart';
 import 'preview_screen.dart';
 
-/// Form input untuk seluruh field laporan. Bila [report] diberikan,
-/// berarti mode edit; jika tidak, mode tambah.
 class FormScreen extends StatefulWidget {
   final Report? report;
   const FormScreen({super.key, this.report});
@@ -24,8 +22,8 @@ class FormScreen extends StatefulWidget {
 }
 
 class _FormScreenState extends State<FormScreen> {
-  final _formKey = GlobalKey<FormState>();
-
+  final _scroll = ScrollController();
+  final _picker = ImagePicker();
   late final TextEditingController _berangkat;
   late final TextEditingController _jam;
   late final TextEditingController _kembali;
@@ -36,490 +34,783 @@ class _FormScreenState extends State<FormScreen> {
   late final TextEditingController _kmAkhir;
   late final TextEditingController _namaCrew;
   late final TextEditingController _catatan;
-
-  // Keuangan
   late final TextEditingController _uangSaku;
   late final TextEditingController _bbm;
   late final TextEditingController _uangMakan;
   late final TextEditingController _extra;
   late final TextEditingController _tagihan;
-
-  // Tanggal yang dipilih via date picker
-  DateTime? _tglBerangkat;
-  DateTime? _tglKembali;
-
-  bool _saving = false;
-  bool get _isEdit => widget.report != null;
-
-  // Lampiran foto struk
   final List<File> _attachments = [];
-  final _picker = ImagePicker();
+  List<String> _initialValues = [];
+  List<String> _initialAttachments = [];
+  bool _loading = true;
+  bool _saving = false;
+  bool _previewing = false;
+  bool _picking = false;
+  bool _allowPop = false;
+  String? _loadError;
+  int _step = 0;
+  bool get _isEdit => widget.report != null;
+  bool get _busy => _saving || _previewing || _picking;
+  List<TextEditingController> get _controllers => [
+        _berangkat,
+        _jam,
+        _kembali,
+        _polisi,
+        _pengemudi,
+        _kernet,
+        _kmAwal,
+        _kmAkhir,
+        _namaCrew,
+        _catatan,
+        _uangSaku,
+        _bbm,
+        _uangMakan,
+        _extra,
+        _tagihan
+      ];
+  bool get _dirty =>
+      !_loading &&
+      _loadError == null &&
+      (!_same(_initialValues, _controllers.map((c) => c.text).toList()) ||
+          !_same(
+              _initialAttachments, _attachments.map((f) => f.path).toList()));
+
+  bool _same(List<String> a, List<String> b) {
+    if (a.length != b.length) return false;
+    for (var i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
+  }
 
   @override
   void initState() {
     super.initState();
     final r = widget.report;
+    String amount(int? value) =>
+        value == null || value == 0 ? '' : formatNumberId(value);
     _berangkat = TextEditingController(text: r?.hariTglBerangkat ?? '');
     _jam = TextEditingController(text: r?.jamBerangkat ?? '');
     _kembali = TextEditingController(text: r?.hariTglKembali ?? '');
     _polisi = TextEditingController(text: r?.noPolisi ?? '');
     _pengemudi = TextEditingController(text: r?.pengemudi ?? '');
     _kernet = TextEditingController(text: r?.kernet ?? '');
-    _kmAwal = TextEditingController(text: r == null ? '' : formatNumberId(r.kmAwal));
-    _kmAkhir = TextEditingController(text: r == null ? '' : formatNumberId(r.kmAkhir));
+    _kmAwal =
+        TextEditingController(text: r == null ? '' : formatNumberId(r.kmAwal));
+    _kmAkhir =
+        TextEditingController(text: r == null ? '' : formatNumberId(r.kmAkhir));
     _namaCrew = TextEditingController(text: r?.namaCrew ?? '');
     _catatan = TextEditingController(text: r?.catatan ?? '');
-    _uangSaku = TextEditingController(text: r == null || r.uangSaku == 0 ? '' : formatNumberId(r.uangSaku));
-    _bbm = TextEditingController(text: r == null || r.bbm == 0 ? '' : formatNumberId(r.bbm));
-    _uangMakan = TextEditingController(text: r == null || r.uangMakan == 0 ? '' : formatNumberId(r.uangMakan));
-    _extra = TextEditingController(text: r == null || r.extra == 0 ? '' : formatNumberId(r.extra));
-    _tagihan = TextEditingController(text: r == null || r.tagihan == 0 ? '' : formatNumberId(r.tagihan));
-    _loadBusInfo();
-    _loadExistingAttachments();
-  }
-
-  @override
-  void dispose() {
-    for (final c in [
-      _berangkat, _jam, _kembali, _polisi, _pengemudi,
-      _kernet, _kmAwal, _kmAkhir, _namaCrew, _catatan,
-      _uangSaku, _bbm, _uangMakan, _extra, _tagihan,
-    ]) {
-      c.dispose();
+    _uangSaku = TextEditingController(text: amount(r?.uangSaku));
+    _bbm = TextEditingController(text: amount(r?.bbm));
+    _uangMakan = TextEditingController(text: amount(r?.uangMakan));
+    _extra = TextEditingController(text: amount(r?.extra));
+    _tagihan = TextEditingController(text: amount(r?.tagihan));
+    for (final c in _controllers) {
+      c.addListener(_changed);
     }
-    super.dispose();
+    _loadInitialData();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(_isEdit ? 'Ubah Laporan' : 'Buat Laporan'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.picture_as_pdf_outlined),
-            tooltip: 'Pratinjau PDF',
-            onPressed: _onPreview,
-          ),
-        ],
-      ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
-          padding: const EdgeInsets.all(16),
-          children: [
-            _sectionTitle('Informasi Perjalanan'),
-            _datePicker(
-              controller: _berangkat,
-              label: 'Hari/Tgl Berangkat',
-              selectedDate: _tglBerangkat,
-              onDateSelected: (d) => setState(() {
-                _tglBerangkat = d;
-                _berangkat.text = DateFormat('EEEE, dd/MM/yyyy', 'id_ID').format(d);
-              }),
-            ),
-            _text(_jam, 'Jam Berangkat', hint: 'mis. 08:00', keyboardType: TextInputType.datetime),
-            _datePicker(
-              controller: _kembali,
-              label: 'Hari/Tgl Kembali',
-              selectedDate: _tglKembali,
-              onDateSelected: (d) => setState(() {
-                _tglKembali = d;
-                _kembali.text = DateFormat('EEEE, dd/MM/yyyy', 'id_ID').format(d);
-              }),
-            ),
-            _text(_polisi, 'No. Polisi', hint: 'mis. B 1234 XX', readOnly: true),
-            _text(_pengemudi, 'Pengemudi', hint: 'Nama sopir'),
-            _text(_kernet, 'Kernet', hint: 'Nama kernet/asisten'),
-            const SizedBox(height: 8),
-            _sectionTitle('Kilometer'),
-            Row(
-              children: [
-                Expanded(child: _rupiahField(_kmAwal, 'KM Awal')),
-                const SizedBox(width: 12),
-                Expanded(child: _rupiahField(_kmAkhir, 'KM Akhir')),
-              ],
-            ),
-            const SizedBox(height: 16),
-            _sectionTitle('Keuangan'),
-            _rupiahField(_uangSaku, 'Uang Saku'),
-            _rupiahField(_bbm, 'BBM'),
-            _rupiahField(_uangMakan, 'Uang Makan'),
-            _rupiahField(_extra, 'Extra'),
-            _rupiahField(_tagihan, 'Tagihan'),
-            const SizedBox(height: 8),
-            _sisaCard(),
-            const SizedBox(height: 16),
-            _sectionTitle('Tanda Tangan'),
-            _text(_namaCrew, 'Nama Crew (Pembuat Laporan)', hint: 'Nama lengkap'),
-            const SizedBox(height: 16),
-            _sectionTitle('Catatan'),
-            _text(_catatan, 'Catatan (Opsional)', hint: 'Catatan tambahan...', maxLines: 3),
-            const SizedBox(height: 16),
-            _sectionTitle('Lampiran Struk BBM'),
-            _attachmentSection(),
-            const SizedBox(height: 24),
-            FilledButton.icon(
-              icon: const Icon(Icons.save_outlined),
-              label: Text(_isEdit ? 'Simpan Perubahan' : 'Simpan Laporan'),
-              onPressed: _saving ? null : _onSave,
-            ),
-            const SizedBox(height: 8),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.picture_as_pdf_outlined),
-              label: const Text('Pratinjau PDF'),
-              onPressed: _onPreview,
-            ),
-          ],
-        ),
-      ),
-    );
+  void _changed() {
+    if (mounted && !_loading) setState(() {});
   }
 
-  // ------------------------------------------------------------ builders
-  Widget _sectionTitle(String text) => Padding(
-        padding: const EdgeInsets.only(top: 8, bottom: 8),
-        child: Text(text,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
-      );
-
-  Widget _text(TextEditingController c, String label,
-      {String? hint, TextInputType? keyboardType, bool required = false, bool readOnly = false, int maxLines = 1}) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextFormField(
-        controller: c,
-        keyboardType: keyboardType,
-        readOnly: readOnly,
-        maxLines: maxLines,
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: hint,
-          border: const OutlineInputBorder(),
-        ),
-        validator: (v) => required && (v == null || v.trim().isEmpty)
-            ? '$label wajib diisi'
-            : null,
-      ),
-    );
-  }
-
-  /// Date picker field — taps open a calendar.
-  Widget _datePicker({
-    required TextEditingController controller,
-    required String label,
-    required DateTime? selectedDate,
-    required ValueChanged<DateTime> onDateSelected,
-  }) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextFormField(
-        controller: controller,
-        readOnly: true,
-        decoration: InputDecoration(
-          labelText: label,
-          hintText: 'Pilih tanggal',
-          border: const OutlineInputBorder(),
-          suffixIcon: const Icon(Icons.calendar_today),
-        ),
-        onTap: () async {
-          final now = DateTime.now();
-          final picked = await showDatePicker(
-            context: context,
-            initialDate: selectedDate ?? now,
-            firstDate: DateTime(2020),
-            lastDate: DateTime(2030),
-            locale: const Locale('id', 'ID'),
-          );
-          if (picked != null) {
-            onDateSelected(picked);
-          }
-        },
-      ),
-    );
-  }
-
-  /// Field angka yang otomatis memformat dengan pemisah ribuan.
-  Widget _rupiahField(TextEditingController c, String label) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 10),
-      child: TextFormField(
-        controller: c,
-        keyboardType: TextInputType.number,
-        inputFormatters: [_ThousandsSeparatorFormatter()],
-        decoration: InputDecoration(
-          labelText: label,
-          border: const OutlineInputBorder(),
-        ),
-        onChanged: (_) => setState(() {}),
-      ),
-    );
-  }
-
-  Widget _sisaCard() {
-    final uangSaku = parseRupiahInput(_uangSaku.text);
-    final pengeluaran = parseRupiahInput(_bbm.text) +
-        parseRupiahInput(_uangMakan.text) +
-        parseRupiahInput(_extra.text) +
-        parseRupiahInput(_tagihan.text);
-    final sisa = uangSaku - pengeluaran;
-    final positif = sisa >= 0;
-    return Card(
-      color: positif ? Colors.green.shade50 : Colors.red.shade50,
-      child: ListTile(
-        title: Text(positif ? 'SISA' : 'DEFISIT'),
-        trailing: Text(
-          formatRupiah(sisa),
-          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-      ),
-    );
-  }
-
-  Widget _attachmentSection() {
-    return Column(
-      children: [
-        if (_attachments.isNotEmpty)
-          SizedBox(
-            height: 120,
-            child: ListView.separated(
-              scrollDirection: Axis.horizontal,
-              itemCount: _attachments.length,
-              separatorBuilder: (_, __) => const SizedBox(width: 8),
-              itemBuilder: (context, i) {
-                return Stack(
-                  children: [
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: Image.file(
-                        _attachments[i],
-                        width: 100,
-                        height: 120,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                    Positioned(
-                      top: 2,
-                      right: 2,
-                      child: GestureDetector(
-                        onTap: () => setState(() => _attachments.removeAt(i)),
-                        child: Container(
-                          decoration: const BoxDecoration(
-                            color: Colors.red,
-                            shape: BoxShape.circle,
-                          ),
-                          padding: const EdgeInsets.all(4),
-                          child: const Icon(Icons.close, size: 14, color: Colors.white),
-                        ),
-                      ),
-                    ),
-                    Positioned(
-                      bottom: 4,
-                      left: 4,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: Text(
-                          '${i + 1}',
-                          style: const TextStyle(color: Colors.white, fontSize: 11),
-                        ),
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-          ),
-        const SizedBox(height: 8),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.camera_alt_outlined),
-                label: const Text('Kamera'),
-                onPressed: () => _pickImage(ImageSource.camera),
-              ),
-            ),
-            const SizedBox(width: 8),
-            Expanded(
-              child: OutlinedButton.icon(
-                icon: const Icon(Icons.photo_library_outlined),
-                label: const Text('Galeri'),
-                onPressed: () => _pickImage(ImageSource.gallery),
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Future<void> _pickImage(ImageSource source) async {
+  Future<void> _loadInitialData() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
     try {
-      if (source == ImageSource.gallery) {
-        final picked = await _picker.pickMultiImage(imageQuality: 85);
-        if (picked.isNotEmpty) {
-          setState(() {
-            _attachments.addAll(picked.map((x) => File(x.path)));
-          });
-        }
-      } else {
-        final picked = await _picker.pickImage(source: source, imageQuality: 85);
-        if (picked != null) {
-          setState(() {
-            _attachments.add(File(picked.path));
-          });
-        }
-      }
-    } catch (e) {
-      Fluttertoast.showToast(msg: 'Gagal mengambil foto: $e');
-    }
-  }
-
-  Future<void> _loadExistingAttachments() async {
-    if (_isEdit && widget.report?.id != null) {
-      final paths = await DatabaseHelper.instance.getAttachments(widget.report!.id!);
+      final db = DatabaseHelper.instance;
       final files = <File>[];
-      for (final path in paths) {
-        final f = File(path);
-        if (await f.exists()) files.add(f);
+      if (_isEdit && widget.report!.id != null) {
+        for (final path in await db.getAttachments(widget.report!.id!)) {
+          final file = File(path);
+          if (await file.exists()) files.add(file);
+        }
+      } else if (!_isEdit) {
+        final index =
+            int.tryParse(await db.getSetting('selected_bus_index') ?? '');
+        if (index != null) {
+          final plate = await db.getSetting('bus_${index}_plate');
+          final km = plate == null ? 0 : await db.getLatestKmForPlate(plate);
+          if (!mounted) return;
+          _polisi.text = plate ?? '';
+          if (km > 0) _kmAwal.text = formatNumberId(km);
+        }
       }
-      if (mounted && files.isNotEmpty) {
+      if (!mounted) return;
+      _attachments
+        ..clear()
+        ..addAll(files);
+      _initialValues = _controllers.map((c) => c.text).toList();
+      _initialAttachments = _attachments.map((f) => f.path).toList();
+      setState(() => _loading = false);
+    } catch (_) {
+      if (mounted) {
         setState(() {
-          _attachments.addAll(files);
+          _loading = false;
+          _loadError =
+              'Data bus atau lampiran belum dapat dimuat. Coba lagi sebelum mengubah laporan.';
         });
       }
     }
   }
 
-  // -------------------------------------------------------------- actions
-  Report _buildReport() {
-    return Report(
-      id: widget.report?.id,
-      tanggalBuat: widget.report?.tanggalBuat ?? DateTime.now(),
-      hariTglBerangkat: _berangkat.text.trim(),
-      jamBerangkat: _jam.text.trim(),
-      hariTglKembali: _kembali.text.trim(),
-      noPolisi: _polisi.text.trim(),
-      pengemudi: _pengemudi.text.trim(),
-      kernet: _kernet.text.trim(),
-      kmAwal: parseRupiahInput(_kmAwal.text),
-      kmAkhir: parseRupiahInput(_kmAkhir.text),
-      uangSaku: parseRupiahInput(_uangSaku.text),
-      bbm: parseRupiahInput(_bbm.text),
-      uangMakan: parseRupiahInput(_uangMakan.text),
-      extra: parseRupiahInput(_extra.text),
-      tagihan: parseRupiahInput(_tagihan.text),
-      namaCrew: _namaCrew.text.trim(),
-      catatan: _catatan.text.trim(),
+  @override
+  void dispose() {
+    for (final c in _controllers) {
+      c.removeListener(_changed);
+      c.dispose();
+    }
+    _scroll.dispose();
+    super.dispose();
+  }
+
+  Future<void> _leave() async {
+    if (_busy) return;
+    if (_dirty) {
+      final discard = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+                title: const Text('Keluar tanpa menyimpan?'),
+                content: const Text(
+                    'Perubahan pada laporan ini belum disimpan. Kembali ke formulir untuk melanjutkan.'),
+                actions: [
+                  TextButton(
+                      onPressed: () => Navigator.pop(ctx, false),
+                      child: const Text('Lanjut mengisi')),
+                  FilledButton(
+                      onPressed: () => Navigator.pop(ctx, true),
+                      child: const Text('Keluar'))
+                ],
+              ));
+      if (discard != true || !mounted) return;
+    }
+    setState(() => _allowPop = true);
+    await WidgetsBinding.instance.endOfFrame;
+    if (mounted) Navigator.pop(context);
+  }
+
+  void _goToStep(int step) {
+    FocusScope.of(context).unfocus();
+    setState(() => _step = step);
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+  }
+
+  @override
+  Widget build(BuildContext context) => PopScope(
+        canPop: _allowPop || (!_dirty && !_busy),
+        onPopInvokedWithResult: (didPop, result) {
+          if (!didPop) _leave();
+        },
+        child: Scaffold(
+          appBar: AppBar(
+            leading: IconButton(
+                onPressed: _busy ? null : _leave,
+                tooltip: 'Kembali',
+                icon: const Icon(Icons.arrow_back_rounded)),
+            title: Text(_isEdit ? 'Ubah laporan' : 'Laporan baru'),
+            actions: [
+              IconButton(
+                  onPressed: _loading || _busy || _loadError != null
+                      ? null
+                      : _onPreview,
+                  tooltip: 'Pratinjau PDF tanpa menyimpan',
+                  icon: const Icon(Icons.picture_as_pdf_outlined)),
+              const SizedBox(width: 8)
+            ],
+          ),
+          body: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _loadError != null
+                  ? Center(
+                      child: EmptyMessage(
+                          icon: Icons.error_outline,
+                          title: 'Data belum siap',
+                          message: _loadError!,
+                          action: FilledButton(
+                              onPressed: _loadInitialData,
+                              child: const Text('Coba lagi'))))
+                  : AbsorbPointer(
+                      absorbing: _busy,
+                      child: ContentWidth(
+                          child: ListView(
+                        controller: _scroll,
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                        children: [
+                          _stepNavigation(),
+                          const SizedBox(height: 24),
+                          Text(
+                              [
+                                'Detail perjalanan',
+                                'Keuangan perjalanan',
+                                'Lengkapi laporan'
+                              ][_step],
+                              style:
+                                  Theme.of(context).textTheme.headlineMedium),
+                          const SizedBox(height: 6),
+                          Text(
+                              [
+                                'Isi jadwal, nama crew, dan kilometer bus.',
+                                'Catat uang saku dan rincian pengeluaran.',
+                                'Tambahkan nama pembuat, catatan, dan struk.'
+                              ][_step],
+                              style: const TextStyle(color: AppColors.muted)),
+                          const SizedBox(height: 24),
+                          if (_step == 0) ..._tripFields(),
+                          if (_step == 1) ..._financeFields(),
+                          if (_step == 2) ..._completionFields(),
+                        ],
+                      ))),
+          bottomNavigationBar: _loading || _loadError != null
+              ? null
+              : BottomActionBar(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                  if (_step == 2) ...[
+                    const Text('Laporan disimpan di perangkat ini.',
+                        style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                    const SizedBox(height: 10),
+                  ],
+                  Row(children: [
+                    if (_step > 0) ...[
+                      OutlinedButton(
+                          onPressed: _busy ? null : () => _goToStep(_step - 1),
+                          child: const Text('Kembali')),
+                      const SizedBox(width: 12)
+                    ],
+                    Expanded(
+                        child: FilledButton.icon(
+                      onPressed: _busy
+                          ? null
+                          : _step < 2
+                              ? () => _goToStep(_step + 1)
+                              : _onSave,
+                      icon: _saving
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2))
+                          : Icon(
+                              _step < 2
+                                  ? Icons.arrow_forward_rounded
+                                  : Icons.check_rounded,
+                              size: 20),
+                      label: Text(_saving
+                          ? 'Menyimpan…'
+                          : _step < 2
+                              ? 'Lanjut'
+                              : 'Simpan laporan'),
+                    )),
+                  ]),
+                ])),
+        ),
+      );
+
+  Widget _stepNavigation() =>
+      Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text('LANGKAH ${_step + 1} DARI 3',
+            style: const TextStyle(
+                fontSize: 11,
+                letterSpacing: 1.3,
+                color: AppColors.muted,
+                fontWeight: FontWeight.w700)),
+        const SizedBox(height: 10),
+        Wrap(spacing: 8, runSpacing: 8, children: [
+          for (final entry
+              in ['Perjalanan', 'Keuangan', 'Lampiran'].asMap().entries)
+            ChoiceChip(
+                label: Text('${entry.key + 1}. ${entry.value}'),
+                selected: _step == entry.key,
+                showCheckmark: false,
+                onSelected: (_) => _goToStep(entry.key)),
+        ]),
+        const SizedBox(height: 12),
+        ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: LinearProgressIndicator(
+                value: (_step + 1) / 3,
+                minHeight: 4,
+                backgroundColor: AppColors.border)),
+      ]);
+
+  List<Widget> _tripFields() => [
+        SectionCard(
+            child: Column(children: [
+          const SectionHeading(
+              title: 'Bus & jadwal',
+              subtitle: 'Nomor polisi mengikuti bus yang dipilih.',
+              icon: Icons.route_outlined),
+          _text(_polisi, 'Nomor polisi',
+              readOnly: true,
+              suffixIcon: const Icon(Icons.lock_outline, size: 18)),
+          const SizedBox(height: 16),
+          _dateField(_berangkat, 'Tanggal berangkat'),
+          const SizedBox(height: 16),
+          _text(_jam, 'Jam berangkat',
+              hint: '08:00',
+              keyboardType: TextInputType.datetime,
+              suffixIcon: IconButton(
+                  onPressed: _pickTime,
+                  tooltip: 'Pilih jam berangkat',
+                  icon: const Icon(Icons.schedule_rounded, size: 20))),
+          const SizedBox(height: 16),
+          _dateField(_kembali, 'Tanggal kembali'),
+          if (_dateOrderWarning) ...[
+            const SizedBox(height: 12),
+            _notice(
+                'Tanggal kembali lebih awal dari keberangkatan. Periksa kembali jadwalnya.')
+          ],
+        ])),
+        const SizedBox(height: 16),
+        SectionCard(
+            child: Column(children: [
+          const SectionHeading(
+              title: 'Crew bertugas', icon: Icons.people_outline_rounded),
+          _text(_pengemudi, 'Nama pengemudi', hint: 'Nama sopir'),
+          const SizedBox(height: 16),
+          _text(_kernet, 'Nama kernet', hint: 'Nama asisten pengemudi'),
+        ])),
+        const SizedBox(height: 16),
+        SectionCard(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const SectionHeading(
+              title: 'Kilometer',
+              subtitle: 'KM awal diisi dari catatan terakhir jika tersedia.',
+              icon: Icons.speed_rounded),
+          AdaptivePair(
+              first: _numberField(_kmAwal, 'KM awal', money: false),
+              second: _numberField(_kmAkhir, 'KM akhir', money: false)),
+          const SizedBox(height: 16),
+          if (_kmAkhir.text.isNotEmpty && _buildReport().jarakTempuh < 0)
+            _notice(
+                'KM akhir lebih kecil dari KM awal. Periksa angka odometer.')
+          else
+            _summaryRow(
+                'Jarak tempuh',
+                _kmAkhir.text.isEmpty
+                    ? 'Belum diisi'
+                    : '${formatNumberId(_buildReport().jarakTempuh)} km'),
+        ])),
+      ];
+
+  List<Widget> _financeFields() => [
+        SectionCard(
+            child: Column(children: [
+          const SectionHeading(
+              title: 'Uang diterima',
+              subtitle: 'Uang saku yang diberikan untuk perjalanan.',
+              icon: Icons.account_balance_wallet_outlined),
+          _numberField(_uangSaku, 'Uang saku'),
+        ])),
+        const SizedBox(height: 16),
+        SectionCard(
+            child: Column(children: [
+          const SectionHeading(
+              title: 'Rincian pengeluaran',
+              subtitle: 'Biarkan kosong jika tidak ada pengeluaran.',
+              icon: Icons.receipt_long_outlined),
+          _numberField(_bbm, 'BBM'),
+          const SizedBox(height: 16),
+          _numberField(_uangMakan, 'Uang makan'),
+          const SizedBox(height: 16),
+          _numberField(_extra, 'Extra'),
+          const SizedBox(height: 16),
+          _numberField(_tagihan, 'Tagihan'),
+        ])),
+        const SizedBox(height: 16),
+        _balanceCard(),
+      ];
+
+  List<Widget> _completionFields() => [
+        SectionCard(
+            child: Column(children: [
+          const SectionHeading(
+              title: 'Pembuat laporan',
+              subtitle: 'Nama ini dicantumkan pada area tanda tangan PDF.',
+              icon: Icons.draw_outlined),
+          _text(_namaCrew, 'Nama crew', hint: 'Nama lengkap pembuat laporan'),
+          const SizedBox(height: 16),
+          _text(_catatan, 'Catatan tambahan',
+              hint: 'Opsional, misalnya kendala selama perjalanan',
+              maxLines: 3),
+        ])),
+        const SizedBox(height: 16),
+        SectionCard(
+            child:
+                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          SectionHeading(
+              title: 'Struk BBM',
+              subtitle:
+                  '${_attachments.length} foto dilampirkan. Setiap foto mendapat halaman sendiri di PDF.',
+              icon: Icons.photo_library_outlined),
+          _attachmentSection(),
+        ])),
+        const SizedBox(height: 16),
+        _balanceCard(),
+        const SizedBox(height: 16),
+        OutlinedButton.icon(
+            onPressed: _busy ? null : _onPreview,
+            icon: _previewing
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.picture_as_pdf_outlined),
+            label: Text(
+                _previewing ? 'Menyiapkan PDF…' : 'Periksa pratinjau PDF')),
+        const SizedBox(height: 8),
+        const Text('Pratinjau tidak menyimpan perubahan laporan.',
+            textAlign: TextAlign.center,
+            style: TextStyle(color: AppColors.muted, fontSize: 12)),
+      ];
+
+  Widget _text(TextEditingController controller, String label,
+          {String? hint,
+          bool readOnly = false,
+          int maxLines = 1,
+          TextInputType? keyboardType,
+          Widget? suffixIcon}) =>
+      TextFormField(
+        controller: controller,
+        readOnly: readOnly,
+        maxLines: maxLines,
+        keyboardType: keyboardType,
+        textCapitalization: keyboardType == null
+            ? TextCapitalization.words
+            : TextCapitalization.none,
+        textInputAction:
+            maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
+        decoration: InputDecoration(
+            labelText: label, hintText: hint, suffixIcon: suffixIcon),
+      );
+
+  Widget _numberField(TextEditingController controller, String label,
+          {bool money = true}) =>
+      TextFormField(
+        controller: controller,
+        keyboardType: TextInputType.number,
+        textInputAction: TextInputAction.next,
+        inputFormatters: [ThousandsSeparatorFormatter()],
+        decoration: InputDecoration(
+            labelText: label,
+            hintText: '0',
+            prefixText: money ? 'Rp ' : null,
+            suffixText: money ? null : 'km'),
+      );
+
+  DateTime? _parseDate(String value) {
+    try {
+      return DateFormat('EEEE, dd/MM/yyyy', 'id_ID').parseStrict(value);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  bool get _dateOrderWarning {
+    final departure = _parseDate(_berangkat.text);
+    final returning = _parseDate(_kembali.text);
+    return departure != null &&
+        returning != null &&
+        returning.isBefore(departure);
+  }
+
+  Widget _dateField(TextEditingController controller, String label) =>
+      TextFormField(
+        controller: controller,
+        readOnly: true,
+        decoration: InputDecoration(
+            labelText: label,
+            hintText: 'Pilih tanggal',
+            suffixIcon: const Icon(Icons.calendar_today_outlined, size: 20)),
+        onTap: () async {
+          final now = DateTime.now();
+          final selected = _parseDate(controller.text) ?? now;
+          final picked = await showDatePicker(
+              context: context,
+              initialDate: selected,
+              firstDate: DateTime(selected.year < 2020 ? selected.year : 2020),
+              lastDate: DateTime(
+                  selected.year > now.year + 10 ? selected.year : now.year + 10,
+                  12,
+                  31),
+              locale: const Locale('id', 'ID'));
+          if (picked != null && mounted) {
+            controller.text =
+                DateFormat('EEEE, dd/MM/yyyy', 'id_ID').format(picked);
+          }
+        },
+      );
+
+  Future<void> _pickTime() async {
+    final parts = _jam.text.split(':');
+    final hour = int.tryParse(parts.first) ?? 8;
+    final minute = parts.length == 2 ? int.tryParse(parts.last) ?? 0 : 0;
+    final picked = await showTimePicker(
+        context: context,
+        initialTime:
+            TimeOfDay(hour: hour.clamp(0, 23), minute: minute.clamp(0, 59)),
+        builder: (context, child) => MediaQuery(
+            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
+            child: child!));
+    if (picked != null && mounted) {
+      _jam.text =
+          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
+    }
+  }
+
+  Widget _notice(String message) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+            color: AppColors.warningSoft,
+            borderRadius: BorderRadius.circular(10)),
+        child: Text(message,
+            style: const TextStyle(color: AppColors.warning, fontSize: 13)),
+      );
+
+  Widget _summaryRow(String label, String value) => Wrap(
+        spacing: 16,
+        runSpacing: 4,
+        alignment: WrapAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: AppColors.muted)),
+          Text(value, style: const TextStyle(fontWeight: FontWeight.w700))
+        ],
+      );
+
+  Widget _balanceCard() {
+    final report = _buildReport();
+    final deficit = report.sisa < 0;
+    final color = deficit ? AppColors.danger : AppColors.success;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+          color: deficit ? AppColors.dangerSoft : AppColors.successSoft,
+          borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _summaryRow('Uang saku', formatRupiah(report.uangSaku)),
+        const SizedBox(height: 8),
+        _summaryRow('Total pengeluaran', formatRupiah(report.totalPengeluaran)),
+        const Divider(height: 28),
+        Text(deficit ? 'Defisit perjalanan' : 'Sisa uang perjalanan',
+            style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text(formatRupiah(report.sisa),
+            style: TextStyle(
+                color: color,
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -.5)),
+        const SizedBox(height: 6),
+        Text(
+            deficit
+                ? 'Pengeluaran melebihi uang saku.'
+                : 'Dihitung otomatis dari uang saku dan pengeluaran.',
+            style: TextStyle(color: color, fontSize: 12)),
+      ]),
     );
   }
 
+  Widget _attachmentSection() => Column(children: [
+        if (_attachments.isEmpty)
+          Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                  color: AppColors.canvas,
+                  borderRadius: BorderRadius.circular(12)),
+              child: const Column(children: [
+                Icon(Icons.add_photo_alternate_outlined,
+                    size: 32, color: AppColors.muted),
+                SizedBox(height: 10),
+                Text('Belum ada struk',
+                    style: TextStyle(fontWeight: FontWeight.w600)),
+                SizedBox(height: 4),
+                Text('Ambil foto yang jelas dan tidak terpotong.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: AppColors.muted, fontSize: 12))
+              ]))
+        else
+          SizedBox(
+              height: 156,
+              child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _attachments.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  itemBuilder: (context, i) => SizedBox(
+                      width: 128,
+                      child: Stack(fit: StackFit.expand, children: [
+                        ClipRRect(
+                            borderRadius: BorderRadius.circular(12),
+                            child: Image.file(_attachments[i],
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => const ColoredBox(
+                                    color: AppColors.canvas,
+                                    child: Center(
+                                        child: Icon(
+                                            Icons.broken_image_outlined))))),
+                        Positioned(
+                            bottom: 8,
+                            left: 8,
+                            child: Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                    color: AppColors.ink,
+                                    borderRadius: BorderRadius.circular(6)),
+                                child: Text('Struk ${i + 1}',
+                                    style: const TextStyle(
+                                        color: Colors.white, fontSize: 11)))),
+                        Positioned(
+                            top: 0,
+                            right: 0,
+                            child: IconButton.filled(
+                                tooltip: 'Hapus struk ${i + 1}',
+                                style: IconButton.styleFrom(
+                                    backgroundColor: AppColors.ink,
+                                    foregroundColor: Colors.white),
+                                onPressed: () =>
+                                    setState(() => _attachments.removeAt(i)),
+                                icon:
+                                    const Icon(Icons.close_rounded, size: 18))),
+                      ])))),
+        const SizedBox(height: 16),
+        AdaptivePair(
+            first: OutlinedButton.icon(
+                onPressed: () => _pickImage(ImageSource.camera),
+                icon: const Icon(Icons.camera_alt_outlined, size: 20),
+                label: const Text('Kamera')),
+            second: OutlinedButton.icon(
+                onPressed: () => _pickImage(ImageSource.gallery),
+                icon: const Icon(Icons.photo_library_outlined, size: 20),
+                label: const Text('Galeri'))),
+        if (_picking)
+          const Padding(
+              padding: EdgeInsets.only(top: 12),
+              child: LinearProgressIndicator()),
+      ]);
+
+  Future<void> _pickImage(ImageSource source) async {
+    if (_busy) return;
+    setState(() => _picking = true);
+    try {
+      final List<XFile> picked;
+      if (source == ImageSource.gallery) {
+        picked = await _picker.pickMultiImage(imageQuality: 85);
+      } else {
+        final image = await _picker.pickImage(source: source, imageQuality: 85);
+        picked = image == null ? [] : [image];
+      }
+      if (mounted) {
+        setState(
+            () => _attachments.addAll(picked.map((image) => File(image.path))));
+      }
+    } catch (_) {
+      if (mounted) {
+        showAppMessage(context,
+            'Foto belum dapat diambil. Periksa izin kamera atau galeri.');
+      }
+    } finally {
+      if (mounted) setState(() => _picking = false);
+    }
+  }
+
+  Report _buildReport() => Report(
+        id: widget.report?.id,
+        tanggalBuat: widget.report?.tanggalBuat ?? DateTime.now(),
+        hariTglBerangkat: _berangkat.text.trim(),
+        jamBerangkat: _jam.text.trim(),
+        hariTglKembali: _kembali.text.trim(),
+        noPolisi: _polisi.text.trim(),
+        pengemudi: _pengemudi.text.trim(),
+        kernet: _kernet.text.trim(),
+        kmAwal: parseRupiahInput(_kmAwal.text),
+        kmAkhir: parseRupiahInput(_kmAkhir.text),
+        uangSaku: parseRupiahInput(_uangSaku.text),
+        bbm: parseRupiahInput(_bbm.text),
+        uangMakan: parseRupiahInput(_uangMakan.text),
+        extra: parseRupiahInput(_extra.text),
+        tagihan: parseRupiahInput(_tagihan.text),
+        namaCrew: _namaCrew.text.trim(),
+        catatan: _catatan.text.trim(),
+      );
+
   Future<void> _onSave() async {
+    if (_busy || _loading) return;
+    FocusScope.of(context).unfocus();
     setState(() => _saving = true);
     try {
-      final r = _buildReport();
-      int reportId;
-      if (_isEdit) {
-        await DatabaseHelper.instance.updateReport(r);
-        reportId = r.id!;
-        // Hapus lampiran lama, simpan ulang
-        await DatabaseHelper.instance.deleteAttachments(reportId);
-      } else {
-        reportId = await DatabaseHelper.instance.insertReport(r);
-      }
-      // Simpan lampiran ke storage dan database
-      final appDir = await getApplicationDocumentsDirectory();
-      final attachDir = Directory(p.join(appDir.path, 'attachments', '$reportId'));
-      if (!attachDir.existsSync()) attachDir.createSync(recursive: true);
-      for (int i = 0; i < _attachments.length; i++) {
-        final src = _attachments[i];
-        final ext = p.extension(src.path);
-        final dest = File(p.join(attachDir.path, 'struk_${i + 1}$ext'));
-        // Jangan copy jika source dan dest sama (file sudah tersimpan)
-        if (src.path != dest.path) {
-          await src.copy(dest.path);
-        }
-        await DatabaseHelper.instance.insertAttachment(reportId, dest.path);
-      }
-      Fluttertoast.showToast(msg: 'Laporan tersimpan');
+      await ReportStorage.save(_buildReport(), List<File>.of(_attachments));
+      if (!mounted) return;
+      setState(() => _allowPop = true);
+      await WidgetsBinding.instance.endOfFrame;
       if (mounted) Navigator.pop(context, true);
-    } catch (e) {
-      Fluttertoast.showToast(msg: 'Gagal menyimpan: $e');
+    } catch (_) {
+      if (mounted) {
+        showAppMessage(context,
+            'Laporan gagal disimpan. Isian Anda tetap ada, silakan coba lagi.');
+      }
     } finally {
       if (mounted) setState(() => _saving = false);
     }
   }
 
-  Future<void> _loadBusInfo() async {
-    if (!_isEdit) {
-      final db = DatabaseHelper.instance;
-      final selectedIndexStr = await db.getSetting('selected_bus_index');
-      if (selectedIndexStr != null) {
-        final index = int.parse(selectedIndexStr);
-        final plate = await db.getSetting('bus_${index}_plate');
-        if (plate != null && mounted) {
-          setState(() {
-            _polisi.text = plate;
-          });
-          final latestKm = await db.getLatestKmForPlate(plate);
-          if (latestKm > 0 && mounted) {
-            setState(() {
-              _kmAwal.text = formatNumberId(latestKm);
-            });
-          }
-        }
-      }
-    }
-  }
-
   Future<void> _onPreview() async {
-    // Pratinjau langsung tanpa wajib menyimpan.
-    final r = _buildReport();
-    final imgBytes = <Uint8List>[];
-    for (final f in _attachments) {
-      imgBytes.add(await f.readAsBytes());
+    if (_busy || _loading) return;
+    FocusScope.of(context).unfocus();
+    setState(() => _previewing = true);
+    try {
+      final report = _buildReport();
+      final images = <Uint8List>[];
+      for (final file in _attachments) {
+        images.add(await file.readAsBytes());
+      }
+      if (!mounted) return;
+      await Navigator.push<void>(
+          context,
+          MaterialPageRoute(
+              builder: (_) =>
+                  PreviewScreen(report: report, attachmentImages: images)));
+    } catch (_) {
+      if (mounted) {
+        showAppMessage(context,
+            'Pratinjau belum dapat dibuat. Periksa lampiran lalu coba lagi.');
+      }
+    } finally {
+      if (mounted) setState(() => _previewing = false);
     }
-    await Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => PreviewScreen(
-          report: r,
-          attachmentImages: imgBytes,
-        ),
-      ),
-    );
   }
 }
 
-/// Formatter yang otomatis menambahkan titik pemisah ribuan saat mengetik angka.
-class _ThousandsSeparatorFormatter extends TextInputFormatter {
+/// Keeps the caret beside the edited digits, including edits in the middle.
+class ThousandsSeparatorFormatter extends TextInputFormatter {
   @override
   TextEditingValue formatEditUpdate(
-    TextEditingValue oldValue,
-    TextEditingValue newValue,
-  ) {
-    // Hapus semua non-digit
-    final digitsOnly = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
-    if (digitsOnly.isEmpty) {
-      return newValue.copyWith(text: '', selection: const TextSelection.collapsed(offset: 0));
+      TextEditingValue oldValue, TextEditingValue newValue) {
+    final digits = newValue.text.replaceAll(RegExp(r'[^0-9]'), '');
+    if (digits.isEmpty) return const TextEditingValue();
+    final buffer = StringBuffer();
+    for (var i = 0; i < digits.length; i++) {
+      if (i > 0 && (digits.length - i) % 3 == 0) buffer.write('.');
+      buffer.write(digits[i]);
     }
-
-    // Format dengan pemisah titik ribuan
-    final result = StringBuffer();
-    for (int i = 0; i < digitsOnly.length; i++) {
-      if (i > 0 && (digitsOnly.length - i) % 3 == 0) {
-        result.write('.');
-      }
-      result.write(digitsOnly[i]);
+    final formatted = buffer.toString();
+    final end = newValue.selection.extentOffset.clamp(0, newValue.text.length);
+    final digitsBefore = newValue.text
+        .substring(0, end)
+        .replaceAll(RegExp(r'[^0-9]'), '')
+        .length;
+    var offset = 0;
+    var count = 0;
+    while (offset < formatted.length && count < digitsBefore) {
+      if (formatted[offset] != '.') count++;
+      offset++;
     }
-    final formatted = result.toString();
     return TextEditingValue(
-      text: formatted,
-      selection: TextSelection.collapsed(offset: formatted.length),
-    );
+        text: formatted, selection: TextSelection.collapsed(offset: offset));
   }
 }

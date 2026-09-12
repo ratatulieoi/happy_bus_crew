@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
-import 'package:fluttertoast/fluttertoast.dart';
+
 import '../db/database.dart';
+import '../ui/app_theme.dart';
+import '../ui/components.dart';
 
 class BusSetupScreen extends StatefulWidget {
   final bool forceSetup;
@@ -12,267 +14,272 @@ class BusSetupScreen extends StatefulWidget {
 
 class _BusSetupScreenState extends State<BusSetupScreen> {
   final _formKey = GlobalKey<FormState>();
-  final List<TextEditingController> _nameControllers = [];
-  final List<TextEditingController> _plateControllers = [];
+  final _nameControllers = List.generate(6, (_) => TextEditingController());
+  final _plateControllers = List.generate(6, (_) => TextEditingController());
   int _selectedBusIndex = 0;
   bool _isLoading = true;
   bool _isSaving = false;
+  bool _saved = false;
+  String? _loadError;
 
   @override
   void initState() {
     super.initState();
-    // Initialize 6 slots
-    for (int i = 0; i < 6; i++) {
-      _nameControllers.add(TextEditingController());
-      _plateControllers.add(TextEditingController());
-    }
     _loadBusData();
   }
 
   @override
   void dispose() {
-    for (var c in _nameControllers) {
-      c.dispose();
-    }
-    for (var c in _plateControllers) {
-      c.dispose();
+    for (final controller in [..._nameControllers, ..._plateControllers]) {
+      controller.dispose();
     }
     super.dispose();
   }
 
   Future<void> _loadBusData() async {
-    final db = DatabaseHelper.instance;
-    final selectedIndexStr = await db.getSetting('selected_bus_index');
-    if (selectedIndexStr != null) {
-      _selectedBusIndex = int.tryParse(selectedIndexStr) ?? 0;
-    }
-
-    for (int i = 0; i < 6; i++) {
-      final name = await db.getSetting('bus_${i}_name');
-      final plate = await db.getSetting('bus_${i}_plate');
-      _nameControllers[i].text = name ?? 'Bus ${i + 1}';
-      _plateControllers[i].text = plate ?? 'B 100${i + 1} XX';
-    }
-
     setState(() {
-      _isLoading = false;
+      _isLoading = true;
+      _loadError = null;
     });
+    try {
+      final db = DatabaseHelper.instance;
+      final selected =
+          int.tryParse(await db.getSetting('selected_bus_index') ?? '') ?? 0;
+      final names = <String>[];
+      final plates = <String>[];
+      for (int i = 0; i < 6; i++) {
+        names.add(await db.getSetting('bus_${i}_name') ?? 'Bus ${i + 1}');
+        plates.add(await db.getSetting('bus_${i}_plate') ?? 'B 100${i + 1} XX');
+      }
+      if (!mounted) return;
+      setState(() {
+        _selectedBusIndex = selected >= 0 && selected < 6 ? selected : 0;
+        for (int i = 0; i < 6; i++) {
+          _nameControllers[i].text = names[i];
+          _plateControllers[i].text = plates[i];
+        }
+        _isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _isLoading = false;
+        _loadError =
+            'Data bus belum dapat dimuat. Periksa kembali dengan mencoba ulang.';
+      });
+    }
   }
 
   Future<void> _saveData() async {
-    if (!_formKey.currentState!.validate()) {
-      Fluttertoast.showToast(msg: 'Mohon lengkapi semua nama dan nomor polisi bus.');
+    if (_isSaving || _saved || _isLoading || _loadError != null) return;
+    if (!(_formKey.currentState?.validate() ?? false)) {
+      showAppMessage(
+          context, 'Lengkapi nama dan nomor polisi untuk keenam bus.');
       return;
     }
-
-    setState(() {
-      _isSaving = true;
-    });
-
+    FocusScope.of(context).unfocus();
+    final names =
+        _nameControllers.map((controller) => controller.text.trim()).toList();
+    final plates = _plateControllers
+        .map((controller) => controller.text.trim().toUpperCase())
+        .toList();
+    setState(() => _isSaving = true);
     try {
       final db = DatabaseHelper.instance;
       await db.setSetting('selected_bus_index', _selectedBusIndex.toString());
-
       for (int i = 0; i < 6; i++) {
-        final name = _nameControllers[i].text.trim();
-        final plate = _plateControllers[i].text.trim().toUpperCase();
-        await db.setSetting('bus_${i}_name', name);
-        await db.setSetting('bus_${i}_plate', plate);
+        await db.setSetting('bus_${i}_name', names[i]);
+        await db.setSetting('bus_${i}_plate', plates[i]);
       }
-
-      // Initialize oil change KM for the newly selected bus if it doesn't exist
       final oilChangeKey = 'bus_${_selectedBusIndex}_oil_change_km';
-      final currentOilChange = await db.getSetting(oilChangeKey);
-      if (currentOilChange == null) {
+      if (await db.getSetting(oilChangeKey) == null) {
         await db.setSetting(oilChangeKey, '0');
       }
-
-      Fluttertoast.showToast(msg: 'Konfigurasi bus berhasil disimpan!');
+      if (!mounted) return;
+      setState(() {
+        _saved = true;
+        _isSaving = false;
+      });
+      showAppMessage(context, 'Konfigurasi bus berhasil disimpan.');
+      // Let PopScope receive the successful setup state before leaving.
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) Navigator.pop(context, true);
+      });
+    } catch (_) {
       if (mounted) {
-        Navigator.pop(context, true);
+        showAppMessage(
+            context, 'Konfigurasi gagal disimpan. Silakan coba simpan lagi.');
       }
-    } catch (e) {
-      Fluttertoast.showToast(msg: 'Gagal menyimpan: $e');
     } finally {
-      if (mounted) {
-        setState(() {
-          _isSaving = false;
-        });
-      }
+      if (mounted) setState(() => _isSaving = false);
     }
+  }
+
+  Widget _busCard(int index) {
+    final selected = index == _selectedBusIndex;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: SectionCard(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            RadioListTile<int>(
+              contentPadding: EdgeInsets.zero,
+              value: index,
+              groupValue: _selectedBusIndex,
+              onChanged: _isSaving
+                  ? null
+                  : (value) => setState(() => _selectedBusIndex = value!),
+              title: Text('Bus ${index + 1}',
+                  style: Theme.of(context).textTheme.titleMedium),
+              subtitle: Text(selected
+                  ? 'Digunakan di perangkat ini'
+                  : 'Pilih untuk perangkat ini'),
+              activeColor: AppColors.brand,
+            ),
+            const SizedBox(height: 12),
+            TextFormField(
+              controller: _nameControllers[index],
+              enabled: !_isSaving,
+              decoration: const InputDecoration(
+                  labelText: 'Nama bus / label', hintText: 'Contoh: Bus A'),
+              textInputAction: TextInputAction.next,
+              onChanged: (_) => setState(() {}),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? 'Isi nama bus.'
+                  : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _plateControllers[index],
+              enabled: !_isSaving,
+              decoration: const InputDecoration(
+                  labelText: 'Nomor polisi', hintText: 'Contoh: B 1234 XX'),
+              textCapitalization: TextCapitalization.characters,
+              textInputAction:
+                  index == 5 ? TextInputAction.done : TextInputAction.next,
+              onChanged: (_) => setState(() {}),
+              validator: (value) => value == null || value.trim().isEmpty
+                  ? 'Isi nomor polisi.'
+                  : null,
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
+    final name = _nameControllers[_selectedBusIndex].text.trim();
+    final plate =
+        _plateControllers[_selectedBusIndex].text.trim().toUpperCase();
     return PopScope(
-      canPop: !widget.forceSetup,
+      canPop: !_isSaving && (!widget.forceSetup || _saved),
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.forceSetup ? 'Setup Awal Bus' : 'Konfigurasi Bus'),
-          automaticallyImplyLeading: !widget.forceSetup,
+          title: Text(widget.forceSetup ? 'Pengaturan awal' : 'Pengaturan bus'),
+          automaticallyImplyLeading: !widget.forceSetup && !_isSaving,
         ),
         body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : Form(
-              key: _formKey,
-              child: Column(
-                children: [
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    color: Theme.of(context).colorScheme.primaryContainer,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Konfigurasi Perangkat',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                              ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Isi data 6 bus utama dan pilih salah satu bus yang digunakan oleh HP ini.',
-                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                color: Theme.of(context).colorScheme.onPrimaryContainer,
-                              ),
-                        ),
-                      ],
+            ? const Center(
+                child: CircularProgressIndicator(
+                    semanticsLabel: 'Memuat data bus'))
+            : _loadError != null
+                ? Center(
+                    child: SingleChildScrollView(
+                      child: EmptyMessage(
+                        icon: Icons.directions_bus_outlined,
+                        title: 'Data bus belum tersedia',
+                        message: _loadError!,
+                        action: FilledButton.icon(
+                            onPressed: _loadBusData,
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('Coba lagi')),
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(12),
-                      itemCount: 6,
-                      itemBuilder: (context, i) {
-                        final isSelected = _selectedBusIndex == i;
-                        return Card(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            side: BorderSide(
-                              color: isSelected
-                                  ? Theme.of(context).colorScheme.primary
-                                  : Colors.transparent,
-                              width: 2,
-                            ),
-                          ),
-                          elevation: isSelected ? 4 : 1,
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Icon(
-                                      Icons.directions_bus,
-                                      color: isSelected
-                                          ? Theme.of(context).colorScheme.primary
-                                          : Colors.grey,
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      'Slot Bus ${i + 1}',
+                  )
+                : ContentWidth(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Siapkan bus Anda',
+                                style:
+                                    Theme.of(context).textTheme.headlineMedium),
+                            const SizedBox(height: 8),
+                            const Text(
+                                'Lengkapi data 6 bus, lalu pilih satu bus yang digunakan di perangkat ini.',
+                                style: TextStyle(color: AppColors.muted)),
+                            if (widget.forceSetup) ...[
+                              const SizedBox(height: 8),
+                              const Text(
+                                  'Simpan pengaturan ini sebelum membuat laporan.'),
+                            ],
+                            const SizedBox(height: 24),
+                            SectionCard(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const StatusPill(
+                                      label: 'Bus perangkat ini',
+                                      icon: Icons.check_circle_outline,
+                                      color: AppColors.brand,
+                                      background: AppColors.dangerSoft),
+                                  const SizedBox(height: 12),
+                                  Text(
+                                      name.isEmpty
+                                          ? 'Bus ${_selectedBusIndex + 1}'
+                                          : name,
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .titleLarge),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                      plate.isEmpty
+                                          ? 'Nomor polisi belum diisi'
+                                          : plate,
                                       style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                      ),
-                                    ),
-                                    const Spacer(),
-                                    Radio<int>(
-                                      value: i,
-                                      groupValue: _selectedBusIndex,
-                                      onChanged: (val) {
-                                        if (val != null) {
-                                          setState(() {
-                                            _selectedBusIndex = val;
-                                          });
-                                        }
-                                      },
-                                    ),
-                                    GestureDetector(
-                                      onTap: () {
-                                        setState(() {
-                                          _selectedBusIndex = i;
-                                        });
-                                      },
-                                      child: Text(
-                                        'Pilih HP Ini',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w600,
-                                          color: isSelected
-                                              ? Theme.of(context).colorScheme.primary
-                                              : Colors.grey[700],
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const Divider(height: 16),
-                                Row(
-                                  children: [
-                                    Expanded(
-                                      flex: 3,
-                                      child: TextFormField(
-                                        controller: _nameControllers[i],
-                                        decoration: const InputDecoration(
-                                          labelText: 'Nama Bus / Label',
-                                          hintText: 'mis. Bus A',
-                                          border: OutlineInputBorder(),
-                                          isDense: true,
-                                        ),
-                                        validator: (v) => v == null || v.trim().isEmpty
-                                            ? 'Wajib diisi'
-                                            : null,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Expanded(
-                                      flex: 2,
-                                      child: TextFormField(
-                                        controller: _plateControllers[i],
-                                        decoration: const InputDecoration(
-                                          labelText: 'No. Polisi',
-                                          hintText: 'mis. B 1234 XX',
-                                          border: OutlineInputBorder(),
-                                          isDense: true,
-                                        ),
-                                        textCapitalization: TextCapitalization.characters,
-                                        validator: (v) => v == null || v.trim().isEmpty
-                                            ? 'Wajib diisi'
-                                            : null,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: FilledButton(
-                      onPressed: _isSaving ? null : _saveData,
-                      child: _isSaving
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                color: Colors.white,
+                                          color: AppColors.muted)),
+                                ],
                               ),
-                            )
-                          : const Text('Simpan & Lanjutkan'),
+                            ),
+                            const SizedBox(height: 24),
+                            const SectionHeading(
+                                title: 'Daftar bus',
+                                subtitle:
+                                    'Semua nama dan nomor polisi wajib diisi.'),
+                            // Keep all fields mounted so validation includes all six slots.
+                            for (int i = 0; i < 6; i++) _busCard(i),
+                          ],
+                        ),
+                      ),
                     ),
                   ),
-                ],
-              ),
+        bottomNavigationBar: BottomActionBar(
+          child: SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: _isLoading || _isSaving || _loadError != null
+                  ? null
+                  : _saveData,
+              icon: _isSaving
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.check_rounded),
+              label: Text(_isSaving
+                  ? 'Menyimpan…'
+                  : widget.forceSetup
+                      ? 'Simpan & lanjutkan'
+                      : 'Simpan pengaturan'),
             ),
+          ),
+        ),
       ),
     );
   }

@@ -105,6 +105,32 @@ class DatabaseHelper {
     return _db!;
   }
 
+  /// Commit report fields and the complete ordered receipt list together.
+  /// A failed transaction leaves both the report and its old links unchanged.
+  Future<int> saveReportWithAttachments(Report report, List<String> paths) async {
+    final database = await db;
+    return database.transaction((txn) async {
+      final int id;
+      if (report.id == null) {
+        id = await txn.insert('reports', report.toMap());
+      } else {
+        id = report.id!;
+        final updated = await txn.update('reports', report.toMap(),
+            where: 'id = ?', whereArgs: [id]);
+        if (updated != 1) throw StateError('Report no longer exists');
+        await txn.delete('report_attachments',
+            where: 'report_id = ?', whereArgs: [id]);
+      }
+      for (final path in paths) {
+        await txn.insert('report_attachments', {
+          'report_id': id,
+          'file_path': path,
+        });
+      }
+      return id;
+    });
+  }
+
   /// Simpan laporan baru. Mengembalikan id baru.
   Future<int> insertReport(Report r) async {
     final database = await db;
