@@ -1,9 +1,15 @@
-# Happy Bus — Laporan Pertanggungjawaban Crew
+# Happy Bus
 
-Aplikasi Android untuk membuat **Laporan Pertanggungjawaban Crew** dalam format PDF.
-Dibuat dengan **Flutter**, menyimpan laporan secara lokal (SQLite), dan mengekspor ke PDF A4.
+## Status branch `online-version`
 
-> Bahasa: Bahasa Indonesia · Mata uang: Rupiah (Rp) · Offline (tanpa server)
+- `backend/` berisi backend Django dan halaman web untuk login, laporan crew, unggah nota, dan pengelolaan admin.
+- Backend masih berupa prototipe lokal, belum tersedia di internet dan belum siap untuk produksi.
+- Aplikasi Flutter tetap berjalan offline dan belum terhubung ke backend. Data lokalnya belum dimigrasikan.
+
+Lihat [panduan backend](backend/README.md) untuk instalasi, pembuatan akun admin, menjalankan server, dan pengujian.
+
+Dokumentasi di bawah ini khusus untuk aplikasi Android Flutter yang menyimpan laporan di SQLite lokal dan mengekspor PDF A4.
+Bahasa aplikasi adalah Bahasa Indonesia, dengan mata uang Rupiah.
 
 ---
 
@@ -68,6 +74,7 @@ Kirim file `.apk` tersebut ke HP Android, pasang, dan jalankan.
 happy_bus_crew/
 ├── pubspec.yaml
 ├── README.md
+├── backend/                  # backend Django dan halaman web lokal
 ├── assets/
 │   └── logo.png              # logo placeholder — GANTI dengan logo asli
 └── lib/
