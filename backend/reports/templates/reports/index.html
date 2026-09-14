@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Happy Bus — Laporan Crew</title>
+  <style>
+    :root { color-scheme: light; font-family: system-ui, sans-serif; }
+    body { max-width: 1100px; margin: 0 auto; padding: 1rem; color: #202124; background: #f7f7f7; }
+    header, section, article { background: white; border: 1px solid #ddd; border-radius: .5rem; padding: 1rem; margin: 0 0 1rem; }
+    h1, h2, h3 { margin-top: 0; }
+    form { display: grid; gap: .55rem; margin-bottom: 1rem; }
+    label { display: grid; gap: .2rem; font-weight: 600; }
+    input, textarea, select, button { box-sizing: border-box; font: inherit; padding: .45rem; }
+    input, textarea, select { width: 100%; border: 1px solid #999; border-radius: .25rem; }
+    textarea { min-height: 5rem; }
+    button { cursor: pointer; border: 1px solid #555; border-radius: .25rem; background: #fff; }
+    button:hover { background: #eee; }
+    .grid { display: grid; gap: .8rem; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); }
+    .actions { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; }
+    .notice { padding: .6rem; border-radius: .25rem; background: #fff6d6; }
+    .error { color: #9b111e; white-space: pre-wrap; }
+    .hidden { display: none !important; }
+    .muted { color: #666; }
+    table { width: 100%; border-collapse: collapse; margin-top: .5rem; }
+    th, td { padding: .45rem; text-align: left; vertical-align: top; border-bottom: 1px solid #ddd; }
+    .report-card, .bus-card, .user-card { border: 1px solid #ddd; padding: .7rem; margin: .5rem 0; border-radius: .25rem; }
+    .calculation { font-weight: 700; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>Happy Bus — Laporan Crew</h1>
+  <p id="status" class="muted">Memuat sesi…</p>
+  <div id="login-panel">
+    <form id="login-form" autocomplete="on">
+      <label>Username <input name="username" autocomplete="username" required></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      <button type="submit">Masuk</button>
+      <p id="login-error" class="error" role="alert"></p>
+    </form>
+  </div>
+  <div id="account-panel" class="hidden actions">
+    <span id="account-label"></span>
+    <button id="logout-button" type="button">Keluar</button>
+  </div>
+</header>
+
+<main id="app" class="hidden">
+  <section>
+    <h2>Bus dan perawatan</h2>
+    <div id="buses" aria-live="polite"></div>
+  </section>
+
+  <section id="admin-panel" class="hidden">
+    <h2>Administrasi</h2>
+    <h3>Akun crew</h3>
+    <form id="user-form" class="grid">
+      <label>Username crew <input name="username" maxlength="150" required></label>
+      <label>Password baru (min. 10 karakter) <input name="password" type="password" minlength="10" required></label>
+      <button type="submit">Buat akun crew</button>
+    </form>
+    <p id="user-error" class="error" role="alert"></p>
+    <div id="users"></div>
+  </section>
+
+  <section>
+    <h2 id="report-form-title">Laporan</h2>
+    <form id="report-form">
+      <input type="hidden" name="report_id">
+      <div class="grid">
+        <label>Bus <select name="bus_id" id="report-bus" required></select></label>
+        <label>Hari/tanggal berangkat <input name="hari_tgl_berangkat" maxlength="200" required></label>
+        <label>Jam berangkat <input name="jam_berangkat" maxlength="200" required></label>
+        <label>Hari/tanggal kembali <input name="hari_tgl_kembali" maxlength="200" required></label>
+        <label>Pengemudi <input name="pengemudi" maxlength="200" required></label>
+        <label>Kernet <input name="kernet" maxlength="200"></label>
+        <label>Nama crew <input name="nama_crew" maxlength="200" required></label>
+        <label>KM awal <input name="km_awal" type="number" min="0" max="1000000000" required></label>
+        <label>KM akhir <input name="km_akhir" type="number" min="0" max="1000000000" required></label>
+        <label>Uang saku <input name="uang_saku" type="number" min="0" max="1000000000" required></label>
+        <label>BBM <input name="bbm" type="number" min="0" max="1000000000" required></label>
+        <label>Uang makan <input name="uang_makan" type="number" min="0" max="1000000000" required></label>
+        <label>Extra <input name="extra" type="number" min="0" max="1000000000" required></label>
+        <label>Tagihan <input name="tagihan" type="number" min="0" max="1000000000" required></label>
+      </div>
+      <label>Catatan <textarea name="catatan" maxlength="4000"></textarea></label>
+      <div class="actions"><button type="submit">Simpan laporan</button><button id="cancel-edit" type="button">Batal edit</button></div>
+      <p id="report-error" class="error" role="alert"></p>
+    </form>
+  </section>
+
+  <section>
+    <h2>Daftar laporan</h2>
+    <div class="actions">
+      <label>Filter bus <select id="filter-bus"><option value="">Semua bus</option></select></label>
+      <label>Filter status <select id="filter-status"><option value="">Semua status</option><option value="draft">Draft</option><option value="submitted">Terkirim</option></select></label>
+      <label><input id="filter-deficit" type="checkbox"> Hanya defisit</label>
+      <button id="refresh-reports" type="button">Muat ulang</button>
+      <span id="export-control" class="hidden"><a id="export-reports" href="/api/reports/export.csv" download>Unduh CSV akuntansi</a></span>
+    </div>
+    <div id="reports" aria-live="polite"></div>
+  </section>
+</main>
+
+<script>
+(function () {
+  "use strict";
+  let csrfToken = "";
+  let currentUser = null;
+  let buses = [];
+  let reports = [];
+
+  const $ = (id) => document.getElementById(id);
+  const text = (value) => document.createTextNode(value == null ? "" : String(value));
+  const el = (tag, value, className) => {
+    const node = document.createElement(tag);
+    if (value !== undefined) node.appendChild(text(value));
+    if (className) node.className = className;
+    return node;
+  };
+  function showError(target, message) { $(target).textContent = message || ""; }
+  function readCookie(name) {
+    const prefix = name + "=";
+    return document.cookie.split(";").map((part) => part.trim()).find((part) => part.indexOf(prefix) === 0)?.slice(prefix.length) || "";
+  }
+  async function api(path, options) {
+    const opts = options || {};
+    opts.headers = opts.headers || {};
+    if (!(opts.body instanceof FormData) && opts.body !== undefined) opts.headers["Content-Type"] = "application/json";
+    if (opts.method && opts.method !== "GET") opts.headers["X-CSRFToken"] = csrfToken || readCookie("csrftoken");
+    const response = await fetch(path, opts);
+    const type = response.headers.get("content-type") || "";
+    if (!response.ok) {
+      let message = "Permintaan gagal (" + response.status + ")";
+      if (type.indexOf("application/json") >= 0) { const body = await response.json(); message = body.error || message; }
+      else { await response.text(); }
+      throw new Error(message);
+    }
+    if (response.status === 204) return null;
+    if (type.indexOf("application/json") >= 0) return response.json();
+    return response;
+  }
+  function renderSession() {
+    const loggedIn = !!currentUser;
+    $("login-panel").classList.toggle("hidden", loggedIn);
+    $("account-panel").classList.toggle("hidden", !loggedIn);
+    $("app").classList.toggle("hidden", !loggedIn);
+    $("admin-panel").classList.toggle("hidden", !loggedIn || currentUser.role !== "admin");
+    $("export-control").classList.toggle("hidden", !loggedIn || currentUser.role !== "admin");
+    $("status").textContent = loggedIn ? "Sesi aktif" : "Silakan masuk untuk mengelola laporan.";
+    $("account-label").textContent = loggedIn ? currentUser.username + " (" + currentUser.role + ")" : "";
+  }
+  function addOption(select, value, label) { const option = el("option", label); option.value = value; select.appendChild(option); }
+  function labeledInput(label, input) { const wrapper = el("label"); wrapper.appendChild(text(label)); wrapper.appendChild(input); return wrapper; }
+  function renderBusOptions() {
+    const reportBus = $("report-bus"); const filterBus = $("filter-bus");
+    const selectedReportBus = reportBus.value; const selectedFilterBus = filterBus.value;
+    reportBus.replaceChildren(); filterBus.replaceChildren(); addOption(filterBus, "", "Semua bus");
+    buses.forEach((bus) => { addOption(reportBus, String(bus.id), bus.id + " — " + bus.name + " (" + bus.plate + ")"); addOption(filterBus, String(bus.id), bus.id + " — " + bus.name); });
+    if (selectedReportBus && buses.some((bus) => String(bus.id) === selectedReportBus)) reportBus.value = selectedReportBus;
+    else if (!reportBus.disabled && buses[0]) reportBus.value = String(buses[0].id);
+    if (selectedFilterBus && buses.some((bus) => String(bus.id) === selectedFilterBus)) filterBus.value = selectedFilterBus;
+    updateExportLink();
+  }
+  function renderBuses() {
+    const target = $("buses"); target.replaceChildren();
+    buses.forEach((bus) => {
+      const card = el("article", undefined, "bus-card"); card.appendChild(el("h3", bus.name + " — " + bus.plate));
+      const details = el("p", "KM saat ini: " + bus.current_km + " | Servis berikutnya: " + bus.next_service_km + " | Sisa: " + bus.remaining_km + " | Status: " + bus.maintenance_status);
+      card.appendChild(details);
+      if (currentUser.role === "admin") {
+        const form = document.createElement("form"); form.className = "grid";
+        const name = document.createElement("input"); name.value = bus.name; name.name = "name"; name.maxLength = 80;
+        const plate = document.createElement("input"); plate.value = bus.plate; plate.name = "plate"; plate.maxLength = 80;
+        const km = document.createElement("input"); km.type = "number"; km.min = "0"; km.max = "1000000000"; km.name = "km"; km.placeholder = "KM ganti oli";
+        const update = el("button", "Simpan identitas bus"); update.type = "submit";
+        const oil = el("button", "Catat ganti oli"); oil.type = "button";
+        form.append(labeledInput("Nama", name), labeledInput("Plat", plate), labeledInput("KM ganti oli", km), update, oil);
+        form.addEventListener("submit", async (event) => { event.preventDefault(); try { await api("/api/buses/" + bus.id + "/", {method: "PATCH", body: JSON.stringify({name: name.value, plate: plate.value})}); await loadBuses(); } catch (error) { alert(error.message); } });
+        oil.addEventListener("click", async () => { if (km.value === "") { alert("Isi KM ganti oli."); return; } try { await api("/api/buses/" + bus.id + "/oil-change/", {method: "POST", body: JSON.stringify({km: Number(km.value)})}); await loadBuses(); } catch (error) { alert(error.message); } });
+        card.appendChild(form);
+      }
+      target.appendChild(card);
+    });
+  }
+  function reportField(label, value) { const row = el("p"); row.appendChild(el("strong", label + ": ")); row.appendChild(text(value)); return row; }
+  function renderReceipts(report, card) {
+    const heading = el("h4", "Struk"); card.appendChild(heading);
+    report.receipts.forEach((receipt) => {
+      const row = el("div", undefined, "actions"); row.appendChild(text(receipt.filename + " (" + receipt.size + " byte) "));
+      const download = el("a", "Unduh"); download.href = receipt.url; download.target = "_blank"; download.rel = "noopener"; row.appendChild(download);
+      if (report.status === "draft") {
+        const remove = el("button", "Hapus struk"); remove.type = "button"; row.appendChild(remove);
+        remove.addEventListener("click", async () => { if (!confirm("Hapus struk ini?")) return; try { await api(receipt.url, {method: "DELETE"}); await loadReports(); } catch (error) { alert(error.message); } });
+      }
+      card.appendChild(row);
+    });
+    if (report.status === "draft") {
+      const upload = document.createElement("form"); upload.className = "actions";
+      const input = document.createElement("input"); input.type = "file"; input.name = "file"; input.accept = "image/png,image/jpeg"; input.required = true;
+      const button = el("button", "Lampirkan struk"); button.type = "submit"; upload.append(input, button);
+      upload.addEventListener("submit", async (event) => { event.preventDefault(); try { const data = new FormData(upload); await api("/api/reports/" + report.id + "/receipts/", {method: "POST", body: data}); await loadReports(); } catch (error) { alert(error.message); } });
+      card.appendChild(upload);
+    }
+  }
+  function renderReports() {
+    const target = $("reports"); target.replaceChildren();
+    if (!reports.length) { target.appendChild(el("p", "Belum ada laporan.")); return; }
+    reports.forEach((report) => {
+      const card = el("article", undefined, "report-card"); card.appendChild(el("h3", "Laporan #" + report.id + " — " + report.no_polisi));
+      [
+        ["Pemilik", report.owner_id], ["Berangkat", report.hari_tgl_berangkat + " " + report.jam_berangkat], ["Kembali", report.hari_tgl_kembali],
+        ["Pengemudi / kernet", report.pengemudi + " / " + report.kernet], ["Nama crew", report.nama_crew], ["KM", report.km_awal + " → " + report.km_akhir],
+        ["Uang saku", report.uang_saku], ["BBM", report.bbm], ["Uang makan", report.uang_makan], ["Extra", report.extra], ["Tagihan", report.tagihan], ["Catatan", report.catatan]
+      ].forEach((pair) => card.appendChild(reportField(pair[0], pair[1])));
+      const calc = el("p", "Total pengeluaran: " + report.total_pengeluaran + " | Sisa: " + report.sisa + " | Jarak tempuh: " + report.jarak_tempuh, "calculation"); card.appendChild(calc);
+      card.appendChild(reportField("Status", report.status === "submitted" ? "Terkirim" : "Draft"));
+      const actions = el("div", undefined, "actions");
+      if (report.status === "draft") {
+        const edit = el("button", "Edit"); const remove = el("button", "Hapus"); const submit = el("button", "Kirim laporan");
+        edit.type = remove.type = submit.type = "button"; actions.append(edit, submit, remove);
+        edit.addEventListener("click", () => fillReportForm(report));
+        submit.addEventListener("click", async () => { if (!confirm("Kirim laporan ini?")) return; try { await api("/api/reports/" + report.id + "/submit/", {method: "POST", body: "{}"}); await loadReports(); } catch (error) { alert(error.message); } });
+        remove.addEventListener("click", async () => { if (!confirm("Hapus laporan dan semua struknya?")) return; try { await api("/api/reports/" + report.id + "/", {method: "DELETE"}); await loadReports(); } catch (error) { alert(error.message); } });
+      } else if (currentUser.role === "admin") {
+        const reopen = el("button", "Buka kembali"); reopen.type = "button"; actions.append(reopen);
+        reopen.addEventListener("click", async () => { try { await api("/api/reports/" + report.id + "/reopen/", {method: "POST", body: "{}"}); await loadReports(); } catch (error) { alert(error.message); } });
+      }
+      card.appendChild(actions);
+      renderReceipts(report, card); target.appendChild(card);
+    });
+  }
+  function fillReportForm(report) {
+    const form = $("report-form"); Object.keys(report).forEach((key) => { const field = form.elements[key]; if (field && typeof report[key] !== "object") field.value = report[key]; });
+    form.elements.report_id.value = report.id; form.elements.bus_id.disabled = true;
+    $("report-form-title").textContent = "Edit laporan #" + report.id; window.scrollTo({top: form.offsetTop, behavior: "smooth"});
+  }
+  function resetReportForm() { const form = $("report-form"); form.reset(); form.elements.report_id.value = ""; form.elements.bus_id.disabled = false; if (buses[0]) form.elements.bus_id.value = buses[0].id; $("report-form-title").textContent = "Laporan"; showError("report-error", ""); }
+  async function loadBuses() { buses = await api("/api/buses/"); renderBusOptions(); renderBuses(); }
+  function reportFilterQuery() {
+    const params = new URLSearchParams();
+    if ($("filter-bus").value) params.set("bus_id", $("filter-bus").value);
+    if ($("filter-status").value) params.set("status", $("filter-status").value);
+    if ($("filter-deficit").checked) params.set("deficit", "1");
+    return params.toString();
+  }
+  function updateExportLink() {
+    const query = reportFilterQuery();
+    $("export-reports").href = "/api/reports/export.csv" + (query ? "?" + query : "");
+  }
+  async function loadReports() {
+    const query = reportFilterQuery();
+    updateExportLink();
+    reports = await api("/api/reports/" + (query ? "?" + query : "")); renderReports();
+  }
+  async function loadUsers() { if (!currentUser || currentUser.role !== "admin") return; const users = await api("/api/users/"); const target = $("users"); target.replaceChildren(); users.forEach((user) => { const card = el("div", undefined, "user-card"); card.appendChild(el("strong", user.username + " — " + user.role + " — " + (user.is_active ? "aktif" : "nonaktif"))); if (user.role === "crew") { const button = el("button", user.is_active ? "Nonaktifkan" : "Aktifkan"); button.type = "button"; button.addEventListener("click", async () => { try { await api("/api/users/" + user.id + "/", {method: "PATCH", body: JSON.stringify({is_active: !user.is_active})}); await loadUsers(); } catch (error) { showError("user-error", error.message); } }); card.appendChild(button); } target.appendChild(card); }); }
+  async function loadAuthenticatedData() { await Promise.all([loadBuses(), loadReports(), loadUsers()]); }
+  function clearSessionData() {
+    buses = []; reports = [];
+    $("buses").replaceChildren(); $("reports").replaceChildren(); $("users").replaceChildren();
+    $("filter-bus").replaceChildren(); addOption($("filter-bus"), "", "Semua bus");
+    $("filter-status").value = ""; $("filter-deficit").checked = false;
+    $("export-reports").href = "/api/reports/export.csv";
+    resetReportForm(); showError("user-error", ""); showError("report-error", "");
+  }
+  $("login-form").addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; try { const data = await api("/api/login/", {method: "POST", body: JSON.stringify({username: form.username.value, password: form.password.value})}); csrfToken = data.csrf_token || readCookie("csrftoken"); currentUser = data.user; form.reset(); showError("login-error", ""); renderSession(); await loadAuthenticatedData(); } catch (error) { showError("login-error", error.message); } });
+  $("logout-button").addEventListener("click", async () => { try { await api("/api/logout/", {method: "POST", body: "{}"}); currentUser = null; clearSessionData(); renderSession(); } catch (error) { alert(error.message); } });
+  $("report-form").addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; const data = {}; Array.from(form.elements).forEach((field) => { if (!field.name || field.name === "report_id" || field.name === "bus_id" && form.elements.report_id.value) return; if (field.type === "number" || field.name === "bus_id") data[field.name] = Number(field.value); else data[field.name] = field.value; }); try { const id = form.elements.report_id.value; const path = id ? "/api/reports/" + id + "/" : "/api/reports/"; await api(path, {method: id ? "PATCH" : "POST", body: JSON.stringify(data)}); resetReportForm(); await loadReports(); await loadBuses(); } catch (error) { showError("report-error", error.message); } });
+  $("cancel-edit").addEventListener("click", resetReportForm); $("refresh-reports").addEventListener("click", () => loadReports().catch((error) => showError("report-error", error.message))); $("filter-bus").addEventListener("change", () => loadReports().catch((error) => showError("report-error", error.message))); $("filter-status").addEventListener("change", () => loadReports().catch((error) => showError("report-error", error.message))); $("filter-deficit").addEventListener("change", () => loadReports().catch((error) => showError("report-error", error.message)));
+  $("user-form").addEventListener("submit", async (event) => { event.preventDefault(); const form = event.currentTarget; try { await api("/api/users/", {method: "POST", body: JSON.stringify({username: form.username.value, password: form.password.value})}); form.reset(); showError("user-error", ""); await loadUsers(); } catch (error) { showError("user-error", error.message); } });
+  async function getSession() {
+    const data = await api("/api/session/");
+    csrfToken = data.csrf_token || readCookie("csrftoken");
+    currentUser = data.user;
+    renderSession();
+    if (currentUser) await loadAuthenticatedData();
+  }
+  getSession().catch((error) => { $("status").textContent = error.message; });
+}());
+</script>
+</body>
+</html>
