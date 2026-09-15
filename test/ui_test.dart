@@ -44,6 +44,8 @@ Report fixture(
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   final settings = <String, String>{};
+  final settingsRead = <String>[];
+  final settingsWritten = <String>[];
   var reports = <Report>[];
   var failQueries = false;
   final captureKey = GlobalKey();
@@ -73,8 +75,9 @@ void main() {
         'selected_bus_index': '0',
         'bus_0_name': 'Happy Bus 01',
         'bus_0_plate': 'B 1001 XX',
-        'bus_0_oil_change_km': '120000'
       });
+    settingsRead.clear();
+    settingsWritten.clear();
     reports = [
       fixture(),
       fixture(id: 2, plate: 'B 1002 XX', driver: 'Dedi', allowance: 500000)
@@ -101,6 +104,7 @@ void main() {
           }
           if (sql.contains('FROM settings')) {
             final key = values.first as String;
+            settingsRead.add(key);
             return settings.containsKey(key)
                 ? [
                     {'key': key, 'value': settings[key]}
@@ -119,6 +123,7 @@ void main() {
         case 'insert':
           if ((args['sql'] as String).contains('settings')) {
             final values = args['arguments'] as List;
+            settingsWritten.add(values[0] as String);
             settings[values[0] as String] = values[1] as String;
           }
           return 3;
@@ -199,6 +204,12 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(settings['selected_bus_index'], '0');
+    expect(
+        settings.keys,
+        unorderedEquals([
+          'selected_bus_index',
+          for (var i = 0; i < 6; i++) ...['bus_${i}_name', 'bus_${i}_plate'],
+        ]));
     expect(tester.takeException(), isNull);
   });
 
@@ -206,7 +217,7 @@ void main() {
       (tester) async {
     await pumpScreen(tester, const HomeScreen());
     expect(find.text('Happy Bus 01'), findsOneWidget);
-    expect(find.text('Kondisi oli baik'), findsOneWidget);
+    expect(find.text('124.850 km'), findsOneWidget);
     await capture(tester, 'home');
     final search = find.byType(TextField);
     await tester.ensureVisible(search);
@@ -317,23 +328,31 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('oil log validates mileage and refreshes next service',
+  testWidgets('LPJ dashboard and bus setup ignore legacy oil settings',
       (tester) async {
+    final legacySettings = {
+      'bus_0_oil_change_km': '120000',
+      'bus_0_oil_interval': '10000',
+    };
+    settings.addAll(legacySettings);
     await pumpScreen(tester, const HomeScreen());
-    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    expect(find.text('Kilometer terakhir'), findsOneWidget);
+    expect(find.text('124.850 km'), findsOneWidget);
+    expect(find.text('Perawatan oli'), findsNothing);
+    expect(find.text('Catat ganti oli'), findsNothing);
+    expect(find.byIcon(Icons.oil_barrel_outlined), findsNothing);
+    await tester.tap(find.byTooltip('Konfigurasi bus'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Catat ganti oli'));
+    await tester.tap(find.text('Simpan pengaturan'));
     await tester.pumpAndSettle();
-    final field = find.widgetWithText(TextFormField, 'Kilometer ganti oli');
-    await tester.enterText(field, '');
-    await tester.tap(find.text('Simpan'));
-    await tester.pumpAndSettle();
-    expect(find.text('Masukkan kilometer yang valid'), findsOneWidget);
-    await tester.enterText(field, '124850');
-    await tester.tap(find.text('Simpan'));
-    await tester.pumpAndSettle();
-    expect(settings['bus_0_oil_change_km'], '124850');
-    expect(find.text('10.000 km menuju ganti oli'), findsOneWidget);
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.text('Happy Bus 01'), findsOneWidget);
+    expect(find.text('124.850 km'), findsOneWidget);
+    expect(settingsRead.where((key) => key.contains('_oil_')), isEmpty);
+    expect(settingsWritten.where((key) => key.contains('_oil_')), isEmpty);
+    for (final entry in legacySettings.entries) {
+      expect(settings[entry.key], entry.value);
+    }
     expect(tester.takeException(), isNull);
   });
 

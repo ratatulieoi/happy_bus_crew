@@ -91,10 +91,6 @@ class _BusSetupScreenState extends State<BusSetupScreen> {
         await db.setSetting('bus_${i}_name', names[i]);
         await db.setSetting('bus_${i}_plate', plates[i]);
       }
-      final oilChangeKey = 'bus_${_selectedBusIndex}_oil_change_km';
-      if (await db.getSetting(oilChangeKey) == null) {
-        await db.setSetting(oilChangeKey, '0');
-      }
       if (!mounted) return;
       setState(() {
         _saved = true;

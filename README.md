@@ -5,6 +5,12 @@ Dibuat dengan **Flutter**, menyimpan laporan secara lokal (SQLite), dan mengeksp
 
 > Bahasa: Bahasa Indonesia · Mata uang: Rupiah (Rp) · Offline (tanpa server)
 
+## Branch `lpj-only`
+
+Branch ini berasal dari `main` dan mempertahankan tampilan Flutter terbaru untuk laporan pertanggungjawaban crew. Pelacakan oli, pengingat ganti oli, dan pencatatan ganti oli tidak tersedia.
+
+Konfigurasi bus, kilometer perjalanan, laporan, lampiran struk, dan ekspor PDF tetap tersedia secara offline. Branch ini tidak menyertakan backend atau konfigurasi online. Pengaturan oli dari versi sebelumnya diabaikan tanpa menghapus data laporan atau mengubah skema database.
+
 ---
 
 ## ✨ Fitur

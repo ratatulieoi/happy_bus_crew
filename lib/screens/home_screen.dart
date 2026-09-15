@@ -1,7 +1,7 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../db/database.dart';
 import '../models/report.dart';
@@ -24,10 +24,7 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Report> _reports = [];
   String _busName = '';
   String _plate = '';
-  int _busIndex = 0;
   int _currentKm = 0;
-  int _lastOilKm = 0;
-  int _oilInterval = 10000;
   int _filter = 0;
   bool _loading = true;
   bool _opening = false;
@@ -81,21 +78,12 @@ class _HomeScreenState extends State<HomeScreen> {
           await db.getSetting('bus_${index}_name') ?? 'Bus ${index + 1}';
       final plate =
           await db.getSetting('bus_${index}_plate') ?? 'B 100${index + 1} XX';
-      final lastOil = int.tryParse(
-              await db.getSetting('bus_${index}_oil_change_km') ?? '') ??
-          0;
-      final interval = int.tryParse(
-              await db.getSetting('bus_${index}_oil_interval') ?? '') ??
-          10000;
       final km = await db.getLatestKmForPlate(plate);
       final reports = await db.getAllReports();
       if (!mounted) return;
       setState(() {
-        _busIndex = index;
         _busName = name;
         _plate = plate;
-        _lastOilKm = lastOil;
-        _oilInterval = interval > 0 ? interval : 10000;
         _currentKm = km;
         _reports = reports;
         _loading = false;
@@ -197,8 +185,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                     style: TextStyle(color: AppColors.muted)),
                                 const SizedBox(height: 24),
                                 _busCard(),
-                                const SizedBox(height: 12),
-                                _oilCard(),
                                 const SizedBox(height: 28),
                                 Row(children: [
                                   Expanded(
@@ -369,72 +355,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ]),
       );
 
-  Widget _oilCard() {
-    final used = _currentKm - _lastOilKm;
-    final remaining = _oilInterval - used;
-    final due = remaining <= 0;
-    final soon = remaining <= 2000;
-    final color = due
-        ? AppColors.danger
-        : soon
-            ? AppColors.warning
-            : AppColors.success;
-    final background = due
-        ? AppColors.dangerSoft
-        : soon
-            ? AppColors.warningSoft
-            : AppColors.successSoft;
-    return SectionCard(
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            const Text('Perawatan oli',
-                style: TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-            StatusPill(
-                label: due
-                    ? 'Waktunya ganti oli'
-                    : soon
-                        ? 'Segera ganti oli'
-                        : 'Kondisi oli baik',
-                color: color,
-                background: background,
-                icon: due
-                    ? Icons.warning_amber_rounded
-                    : Icons.oil_barrel_outlined),
-          ]),
-      const SizedBox(height: 16),
-      ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-              value: (used / _oilInterval).clamp(0.0, 1.0),
-              minHeight: 7,
-              backgroundColor: AppColors.canvas,
-              color: color)),
-      const SizedBox(height: 10),
-      Text(
-          remaining < 0
-              ? 'Lewat ${formatNumberId(-remaining)} km dari jadwal'
-              : remaining == 0
-                  ? 'Jadwal ganti oli sudah tercapai'
-                  : '${formatNumberId(remaining)} km menuju ganti oli',
-          style: TextStyle(color: color, fontWeight: FontWeight.w600)),
-      const SizedBox(height: 8),
-      Text(
-          'Terakhir ${formatNumberId(_lastOilKm)} km  •  Berikutnya ${formatNumberId(_lastOilKm + _oilInterval)} km',
-          style: Theme.of(context).textTheme.bodySmall),
-      const SizedBox(height: 8),
-      Align(
-          alignment: Alignment.centerRight,
-          child: TextButton.icon(
-              onPressed: _recordOil,
-              icon: const Icon(Icons.build_outlined, size: 18),
-              label: const Text('Catat ganti oli'))),
-    ]));
-  }
-
   Widget _reportCard(Report report) {
     final deficit = report.sisa < 0;
     return Material(
@@ -516,25 +436,6 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Future<void> _recordOil() async {
-    final km = await showDialog<int>(
-        context: context,
-        builder: (_) => _OilChangeDialog(currentKm: _currentKm));
-    if (km == null || !mounted) return;
-    try {
-      await DatabaseHelper.instance
-          .setSetting('bus_${_busIndex}_oil_change_km', '$km');
-      if (!mounted) return;
-      showAppMessage(context, 'Catatan ganti oli disimpan.');
-      await _refresh();
-    } catch (_) {
-      if (mounted) {
-        showAppMessage(
-            context, 'Gagal menyimpan catatan ganti oli. Coba lagi.');
-      }
-    }
-  }
-
   Future<void> _openPreview(Report report) async {
     setState(() => _opening = true);
     try {
@@ -591,60 +492,4 @@ class _HomeScreenState extends State<HomeScreen> {
       }
     }
   }
-}
-
-class _OilChangeDialog extends StatefulWidget {
-  final int currentKm;
-  const _OilChangeDialog({required this.currentKm});
-
-  @override
-  State<_OilChangeDialog> createState() => _OilChangeDialogState();
-}
-
-class _OilChangeDialogState extends State<_OilChangeDialog> {
-  final _key = GlobalKey<FormState>();
-  late final _controller = TextEditingController(text: '${widget.currentKm}');
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) => AlertDialog(
-        title: const Text('Catat ganti oli'),
-        content: Form(
-            key: _key,
-            child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                      'Isi angka odometer saat oli diganti. Pengingat berikutnya dihitung dari angka ini.'),
-                  const SizedBox(height: 20),
-                  TextFormField(
-                      controller: _controller,
-                      autofocus: true,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      decoration: const InputDecoration(
-                          labelText: 'Kilometer ganti oli', suffixText: 'km'),
-                      validator: (v) => int.tryParse(v ?? '') == null
-                          ? 'Masukkan kilometer yang valid'
-                          : null),
-                ])),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Batal')),
-          FilledButton(
-              onPressed: () {
-                if (_key.currentState!.validate()) {
-                  Navigator.pop(context, int.parse(_controller.text));
-                }
-              },
-              child: const Text('Simpan'))
-        ],
-      );
 }
