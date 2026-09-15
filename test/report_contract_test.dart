@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -42,13 +43,29 @@ void main() {
     expect(changed.catatan, 'Diubah');
   });
 
-  test('financial and mileage calculations retain existing contract', () {
+  test('financial calculations retain existing contract', () {
     final r = report();
     expect(r.totalPengeluaran, 800000);
     expect(r.sisa, 200000);
-    expect(r.jarakTempuh, 250);
     expect(r.copyWith(uangSaku: 500000).sisa, -300000);
     expect(r.copyWith(uangSaku: 800000).sisa, 0);
+  });
+
+  test('km awal and km akhir persist as manual per-report inputs', () {
+    final r = report();
+    expect(r.kmAwal, 1000);
+    expect(r.kmAkhir, 1250);
+    expect(r.toMap()['km_awal'], 1000);
+    expect(r.toMap()['km_akhir'], 1250);
+    final restored = Report.fromMap(r.toMap());
+    expect(restored.kmAwal, 1000);
+    expect(restored.kmAkhir, 1250);
+    final edited = r.copyWith(kmAwal: 2000, kmAkhir: 2750);
+    expect(edited.kmAwal, 2000);
+    expect(edited.kmAkhir, 2750);
+    // No derived distance is stored: only the entered values round-trip.
+    expect(edited.toMap()['km_awal'], 2000);
+    expect(edited.toMap()['km_akhir'], 2750);
   });
 
   test('whole rupiah input stays Indonesian', () {
@@ -83,7 +100,7 @@ void main() {
         '');
   });
 
-  test('unchanged PDF builder produces PDF and one page per receipt', () async {
+  test('PDF contains manual KM and receipts without calculated distance', () async {
     final logo =
         (await rootBundle.load('assets/logo.png')).buffer.asUint8List();
     final doc = await ReportPdfBuilder.build(report(),
@@ -92,5 +109,23 @@ void main() {
     expect(ascii.decode(bytes.take(5).toList()), '%PDF-');
     final raw = latin1.decode(bytes);
     expect(RegExp(r'/Type\s*/Page\b').allMatches(raw).length, 3);
+    final streams = <String>[];
+    for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true).allMatches(raw)) {
+      final data = latin1.encode(match.group(1)!);
+      try {
+        streams.add(latin1.decode(zlib.decode(data)));
+      } on FormatException {
+        streams.add(match.group(1)!);
+      }
+    }
+    final content = streams.join('\n');
+    expect(content, contains('Awal'));
+    expect(content, contains('Akhir'));
+    expect(content, contains('1.000'));
+    expect(content, contains('1.250'));
+    expect(content, isNot(contains('Jarak')));
+    expect(content, isNot(contains('Tempuh')));
+    final output = Platform.environment['PDF_TEST_OUTPUT'];
+    if (output != null) await File(output).writeAsBytes(bytes);
   });
 }

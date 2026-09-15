@@ -1,5 +1,6 @@
 import 'package:path/path.dart' as p;
 import 'package:sqflite/sqflite.dart';
+import '../models/bus.dart';
 import '../models/report.dart';
 
 /// Helper SQLite untuk menyimpan laporan crew secara lokal di perangkat.
@@ -16,8 +17,9 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       p.join(dbPath, 'happy_bus.db'),
-      version: 5,
+      version: 6,
       onCreate: (db, v) async {
+        await _createBusTable(db);
         await db.execute('''
           CREATE TABLE reports (
             id                 INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -99,6 +101,10 @@ class DatabaseHelper {
         }
         if (oldVersion < 5) {
           await db.execute("ALTER TABLE reports ADD COLUMN catatan TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 6) {
+          await _createBusTable(db);
+          await _importLegacyBuses(db);
         }
       },
     );
@@ -184,17 +190,91 @@ class DatabaseHelper {
     );
   }
 
-  /// Ambil KM terakhir dari laporan yang terdaftar untuk plat tertentu.
-  Future<int> getLatestKmForPlate(String plate) async {
-    final database = await db;
-    final result = await database.rawQuery(
-      'SELECT MAX(km_akhir) as max_km FROM reports WHERE no_polisi = ?',
-      [plate],
-    );
-    if (result.isEmpty || result.first['max_km'] == null) {
-      return 0;
+  static Future<void> _createBusTable(DatabaseExecutor db) => db.execute('''
+    CREATE TABLE buses (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      plate TEXT NOT NULL COLLATE NOCASE UNIQUE
+    )
+  ''');
+
+  // Import only saved bus identities. Never create placeholder buses or copy KM.
+  static Future<void> _importLegacyBuses(DatabaseExecutor db) async {
+    final rows = await db.query('settings');
+    final settings = {
+      for (final row in rows) row['key'] as String: row['value'] as String,
+    };
+    final selected = int.tryParse(settings['selected_bus_index'] ?? '');
+    final imported = <String, int>{};
+    int? selectedId;
+    for (var index = 0; index < 6; index++) {
+      final name = settings['bus_${index}_name']?.trim() ?? '';
+      final plate = settings['bus_${index}_plate']?.trim().toUpperCase() ?? '';
+      if (name.isEmpty || plate.isEmpty) continue;
+      final id = imported[plate] ??
+          await db.insert('buses', {'name': name, 'plate': plate});
+      imported[plate] = id;
+      if (index == selected) selectedId = id;
     }
-    return result.first['max_km'] as int;
+    if (imported.isNotEmpty) {
+      await db.insert(
+          'settings',
+          {'key': 'selected_bus_id', 'value': '${selectedId ?? imported.values.first}'},
+          conflictAlgorithm: ConflictAlgorithm.replace);
+    }
+  }
+
+  Future<List<Bus>> getBuses() async {
+    final database = await db;
+    return (await database.query('buses', orderBy: 'id ASC'))
+        .map(Bus.fromMap)
+        .toList();
+  }
+
+  Future<Bus?> getSelectedBus() async {
+    final buses = await getBuses();
+    if (buses.isEmpty) return null;
+    final selected = int.tryParse(await getSetting('selected_bus_id') ?? '');
+    return buses.firstWhere((bus) => bus.id == selected,
+        orElse: () => buses.first);
+  }
+
+  Future<void> selectBus(int id) async {
+    final database = await db;
+    if ((await database.query('buses', where: 'id = ?', whereArgs: [id])).isEmpty) {
+      throw StateError('Bus tidak ditemukan.');
+    }
+    await setSetting('selected_bus_id', '$id');
+  }
+
+  /// Save bus identity and selection together, without changing past reports.
+  Future<int> saveBus({int? id, required String name, required String plate}) async {
+    final cleanName = name.trim();
+    final cleanPlate = plate.trim().toUpperCase();
+    if (cleanName.isEmpty || cleanPlate.isEmpty) {
+      throw ArgumentError('Nama dan nomor polisi wajib diisi.');
+    }
+    final database = await db;
+    return database.transaction((txn) async {
+      final data = {'name': cleanName, 'plate': cleanPlate};
+      final int savedId;
+      if (id == null) {
+        savedId = await txn.insert('buses', data);
+      } else {
+        final updated = await txn.update('buses', data,
+            where: 'id = ?', whereArgs: [id]);
+        if (updated != 1) throw StateError('Bus tidak ditemukan.');
+        savedId = id;
+      }
+      await txn.insert('settings', {'key': 'selected_bus_id', 'value': '$savedId'},
+          conflictAlgorithm: ConflictAlgorithm.replace);
+      return savedId;
+    });
+  }
+
+  Future<void> close() async {
+    await _db?.close();
+    _db = null;
   }
 
   // ------------------------------------------------ Attachment helpers

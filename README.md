@@ -7,9 +7,15 @@ Dibuat dengan **Flutter**, menyimpan laporan secara lokal (SQLite), dan mengeksp
 
 ## Branch `lpj-only`
 
-Branch ini berasal dari `main` dan mempertahankan tampilan Flutter terbaru untuk laporan pertanggungjawaban crew. Pelacakan oli, pengingat ganti oli, dan pencatatan ganti oli tidak tersedia.
+Branch ini berasal dari `main` dan mempertahankan tampilan Flutter terbaru untuk laporan pertanggungjawaban crew. Semua data disimpan secara offline tanpa backend atau konfigurasi online.
 
-Konfigurasi bus, kilometer perjalanan, laporan, lampiran struk, dan ekspor PDF tetap tersedia secara offline. Branch ini tidak menyertakan backend atau konfigurasi online. Pengaturan oli dari versi sebelumnya diabaikan tanpa menghapus data laporan atau mengubah skema database.
+- Saat pertama membuka aplikasi, pengguna harus menambahkan satu bus dengan nama dan nomor polisi. Tidak ada enam slot bawaan.
+- Menu **Daftar bus** menyediakan tambah bus, ubah identitas bus, dan pilih bus untuk laporan baru.
+- **KM awal** dan **KM akhir** diisi manual pada setiap laporan. Keduanya tetap tampil di PDF. Tidak ada pelacakan kilometer, pengisian otomatis dari laporan sebelumnya, atau perhitungan jarak tempuh.
+- Pelacakan oli, pengingat ganti oli, dan pencatatan ganti oli tidak tersedia.
+- Laporan lama, lampiran struk, dan ekspor PDF tetap tersedia. Mengubah identitas bus tidak mengubah nomor polisi pada laporan lama.
+
+Database versi 6 menambahkan tabel bus dan memindahkan identitas bus yang sudah tersimpan dari pengaturan lama. Pengaturan oli lama diabaikan. Migrasi tidak menghapus laporan, nilai KM manual, atau lampiran.
 
 ---
 
@@ -17,8 +23,8 @@ Konfigurasi bus, kilometer perjalanan, laporan, lampiran struk, dan ekspor PDF t
 
 - **Form lengkap** sesuai contoh laporan asli:
   - Hari/Tgl Berangkat, Jam, Hari/Tgl Kembali, No. Polisi, Pengemudi, Kernet
-  - KM Awal & KM Akhir (jarak tempuh otomatis)
-  - Tabel **Pendapatan** dan **Pengeluaran** dinamis (tambah/hapus baris)
+  - KM Awal & KM Akhir sebagai isian manual
+  - Uang saku, BBM, uang makan, extra, dan tagihan
   - Total & selisih (surplus/defisit) dihitung otomatis
   - Nama crew untuk tanda tangan
 - **Pratinjau PDF** langsung di layar
@@ -87,6 +93,7 @@ happy_bus_crew/
     ├── pdf/
     │   └── report_pdf.dart   # builder dokumen PDF (layout laporan)
     └── screens/
+        ├── bus_list_screen.dart # tambah, ubah, dan pilih bus
         ├── home_screen.dart  # daftar laporan
         ├── form_screen.dart  # form input semua field
         └── preview_screen.dart # pratinjau PDF + simpan/bagikan/cetak

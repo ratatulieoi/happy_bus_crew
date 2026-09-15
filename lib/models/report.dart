@@ -59,9 +59,6 @@ class Report {
   /// Sisa = Uang Saku - total pengeluaran.
   int get sisa => uangSaku - totalPengeluaran;
 
-  /// Jumlah KM yang ditempuh.
-  int get jarakTempuh => kmAkhir - kmAwal;
-
   /// Label ringkas untuk ditampilkan di daftar laporan (Home).
   String get ringkas =>
       '${noPolisi.isEmpty ? "-" : noPolisi} • ${pengemudi.isEmpty ? "-" : pengemudi}';

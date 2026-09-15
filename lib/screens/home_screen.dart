@@ -8,7 +8,7 @@ import '../models/report.dart';
 import '../ui/app_theme.dart';
 import '../ui/components.dart';
 import '../utils/format.dart';
-import 'bus_setup_screen.dart';
+import 'bus_list_screen.dart';
 import 'form_screen.dart';
 import 'preview_screen.dart';
 
@@ -24,7 +24,6 @@ class _HomeScreenState extends State<HomeScreen> {
   List<Report> _reports = [];
   String _busName = '';
   String _plate = '';
-  int _currentKm = 0;
   int _filter = 0;
   bool _loading = true;
   bool _opening = false;
@@ -48,14 +47,13 @@ class _HomeScreenState extends State<HomeScreen> {
       _error = null;
     });
     try {
-      final selected =
-          await DatabaseHelper.instance.getSetting('selected_bus_index');
+      final selected = await DatabaseHelper.instance.getSelectedBus();
       if (!mounted) return;
       if (selected == null) {
         await Navigator.push<bool>(
             context,
             MaterialPageRoute(
-                builder: (_) => const BusSetupScreen(forceSetup: true)));
+                builder: (_) => const BusListScreen(requireBus: true)));
         if (!mounted) return;
       }
       await _refresh();
@@ -72,19 +70,13 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _refresh() async {
     try {
       final db = DatabaseHelper.instance;
-      final index =
-          int.tryParse(await db.getSetting('selected_bus_index') ?? '') ?? 0;
-      final name =
-          await db.getSetting('bus_${index}_name') ?? 'Bus ${index + 1}';
-      final plate =
-          await db.getSetting('bus_${index}_plate') ?? 'B 100${index + 1} XX';
-      final km = await db.getLatestKmForPlate(plate);
+      final bus = await db.getSelectedBus();
+      if (bus == null) throw StateError('Tambahkan bus terlebih dahulu.');
       final reports = await db.getAllReports();
       if (!mounted) return;
       setState(() {
-        _busName = name;
-        _plate = plate;
-        _currentKm = km;
+        _busName = bus.name;
+        _plate = bus.plate;
         _reports = reports;
         _loading = false;
         _error = null;
@@ -99,10 +91,10 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _configure() async {
-    final updated = await Navigator.push<bool>(
-        context, MaterialPageRoute(builder: (_) => const BusSetupScreen()));
-    if (mounted && updated == true) await _refresh();
+  Future<void> _chooseBus() async {
+    await Navigator.push<bool>(
+        context, MaterialPageRoute(builder: (_) => const BusListScreen()));
+    if (mounted) await _refresh();
   }
 
   Future<void> _edit([Report? report]) async {
@@ -135,9 +127,9 @@ class _HomeScreenState extends State<HomeScreen> {
             width: 154, semanticLabel: 'Happy Group'),
         actions: [
           IconButton(
-              onPressed: _loading ? null : _configure,
-              tooltip: 'Konfigurasi bus',
-              icon: const Icon(Icons.tune_rounded)),
+              onPressed: _loading ? null : _chooseBus,
+              tooltip: 'Daftar bus',
+              icon: const Icon(Icons.directions_bus_outlined)),
           IconButton(
               onPressed: _loading ? null : _initialize,
               tooltip: 'Muat ulang',
@@ -319,39 +311,21 @@ class _HomeScreenState extends State<HomeScreen> {
                           fontWeight: FontWeight.w700)),
                 ])),
             IconButton(
-                onPressed: _configure,
-                tooltip: 'Ganti bus aktif',
+                onPressed: _chooseBus,
+                tooltip: 'Pilih bus',
                 icon:
                     const Icon(Icons.swap_horiz_rounded, color: Colors.white)),
           ]),
           const SizedBox(height: 22),
-          Wrap(
-              spacing: 24,
-              runSpacing: 18,
-              alignment: WrapAlignment.spaceBetween,
-              children: [
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Nomor polisi',
-                      style: TextStyle(color: Color(0xFFBFC5CB), fontSize: 12)),
-                  const SizedBox(height: 6),
-                  Text(_plate,
-                      style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1,
-                          color: Colors.white)),
-                ]),
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  const Text('Kilometer terakhir',
-                      style: TextStyle(color: Color(0xFFBFC5CB), fontSize: 12)),
-                  const SizedBox(height: 6),
-                  Text('${formatNumberId(_currentKm)} km',
-                      style: const TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.w700,
-                          color: Colors.white)),
-                ]),
-              ]),
+          const Text('Nomor polisi',
+              style: TextStyle(color: Color(0xFFBFC5CB), fontSize: 12)),
+          const SizedBox(height: 6),
+          Text(_plate,
+              style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 1,
+                  color: Colors.white)),
         ]),
       );
 
@@ -420,15 +394,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                       : AppColors.success,
                                   fontSize: 17,
                                   fontWeight: FontWeight.w700)),
-                        ]),
-                    Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text('Jarak tempuh',
-                              style: Theme.of(context).textTheme.bodySmall),
-                          Text('${formatNumberId(report.jarakTempuh)} km',
-                              style: const TextStyle(
-                                  fontSize: 17, fontWeight: FontWeight.w600)),
                         ]),
                   ])),
             ])),

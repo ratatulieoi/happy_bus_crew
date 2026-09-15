@@ -154,10 +154,6 @@ class ReportPdfBuilder {
             _field('KM Awal', formatNumberId(r.kmAwal)),
             _field('KM Akhir', formatNumberId(r.kmAkhir)),
           ]),
-          _infoRow([
-            _field('Jarak Tempuh', '${formatNumberId(r.jarakTempuh)} KM'),
-            _field('', ''),
-          ]),
         ],
       ),
     );

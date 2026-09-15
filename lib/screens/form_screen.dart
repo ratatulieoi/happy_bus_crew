@@ -130,15 +130,10 @@ class _FormScreenState extends State<FormScreen> {
           if (await file.exists()) files.add(file);
         }
       } else if (!_isEdit) {
-        final index =
-            int.tryParse(await db.getSetting('selected_bus_index') ?? '');
-        if (index != null) {
-          final plate = await db.getSetting('bus_${index}_plate');
-          final km = plate == null ? 0 : await db.getLatestKmForPlate(plate);
-          if (!mounted) return;
-          _polisi.text = plate ?? '';
-          if (km > 0) _kmAwal.text = formatNumberId(km);
-        }
+        final bus = await db.getSelectedBus();
+        if (bus == null) throw StateError('Tambahkan bus terlebih dahulu.');
+        if (!mounted) return;
+        _polisi.text = bus.plate;
       }
       if (!mounted) return;
       _attachments
@@ -378,21 +373,11 @@ class _FormScreenState extends State<FormScreen> {
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           const SectionHeading(
               title: 'Kilometer',
-              subtitle: 'KM awal diisi dari catatan terakhir jika tersedia.',
+              subtitle: 'Isi KM awal dan KM akhir secara manual untuk laporan ini.',
               icon: Icons.speed_rounded),
           AdaptivePair(
               first: _numberField(_kmAwal, 'KM awal', money: false),
               second: _numberField(_kmAkhir, 'KM akhir', money: false)),
-          const SizedBox(height: 16),
-          if (_kmAkhir.text.isNotEmpty && _buildReport().jarakTempuh < 0)
-            _notice(
-                'KM akhir lebih kecil dari KM awal. Periksa angka odometer.')
-          else
-            _summaryRow(
-                'Jarak tempuh',
-                _kmAkhir.text.isEmpty
-                    ? 'Belum diisi'
-                    : '${formatNumberId(_buildReport().jarakTempuh)} km'),
         ])),
       ];
 
