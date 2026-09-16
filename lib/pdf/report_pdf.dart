@@ -200,8 +200,8 @@ class ReportPdfBuilder {
       {'label': 'Uang Saku', 'value': r.uangSaku},
       {'label': 'BBM', 'value': r.bbm},
       {'label': 'Uang Makan', 'value': r.uangMakan},
-      {'label': 'Extra', 'value': r.extra},
       {'label': 'Tagihan', 'value': r.tagihan},
+      {'label': 'Extra (total)', 'value': r.extra},
     ];
 
     final rows = <pw.TableRow>[
@@ -220,6 +220,14 @@ class ReportPdfBuilder {
             _tableCell(items[i]['label'] as String),
             _tableCell(formatNumberId(items[i]['value'] as int),
                 align: pw.TextAlign.right),
+          ],
+        ),
+      for (final item in r.extras)
+        pw.TableRow(
+          children: [
+            _tableCell('', align: pw.TextAlign.center),
+            _tableCell(item.name.isEmpty ? 'Extra lama' : item.name),
+            _tableCell(formatNumberId(item.amount), align: pw.TextAlign.right),
           ],
         ),
       pw.TableRow(

@@ -35,9 +35,11 @@ void main() {
           await db.execute(
               'CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)');
           await db.execute(
-              'CREATE TABLE reports (id INTEGER PRIMARY KEY, no_polisi TEXT, km_awal INTEGER, km_akhir INTEGER)');
+              'CREATE TABLE reports (id INTEGER PRIMARY KEY, no_polisi TEXT,'
+              ' km_awal INTEGER, km_akhir INTEGER)');
           await db.execute(
-              'CREATE TABLE report_attachments (id INTEGER PRIMARY KEY, report_id INTEGER, file_path TEXT)');
+              'CREATE TABLE report_attachments (id INTEGER PRIMARY KEY,'
+              ' report_id INTEGER, file_path TEXT)');
           for (final entry in settings.entries) {
             await db
                 .insert('settings', {'key': entry.key, 'value': entry.value});
@@ -214,9 +216,15 @@ void main() {
     expect((await store.getSelectedBus())!.name, 'Selected');
     expect((await store.getSelectedBus())!.plate, 'L 4004 AB');
     final db = await store.db;
-    expect(await db.getVersion(), 6);
+    expect(await db.getVersion(), 7);
     expect(await db.query('reports'), [
-      {'id': 7, 'no_polisi': 'B 1001 XX', 'km_awal': 123, 'km_akhir': 456}
+      {
+        'id': 7,
+        'no_polisi': 'B 1001 XX',
+        'km_awal': 123,
+        'km_akhir': 456,
+        'extra_details': '[]'
+      }
     ]);
     expect(await db.query('report_attachments'), [
       {'id': 1, 'report_id': 7, 'file_path': '/saved/receipt.jpg'}

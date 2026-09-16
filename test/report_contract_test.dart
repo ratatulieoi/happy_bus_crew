@@ -27,7 +27,10 @@ void main() {
         uangSaku: 1000000,
         bbm: 600000,
         uangMakan: 100000,
-        extra: 50000,
+        extras: const [
+          ExtraExpense(name: 'Parkir', amount: 20000),
+          ExtraExpense(name: 'Tol', amount: 30000),
+        ],
         tagihan: 50000,
         namaCrew: 'Budi',
         catatan: 'Catatan perjalanan',
@@ -45,10 +48,67 @@ void main() {
 
   test('financial calculations retain existing contract', () {
     final r = report();
+    expect(r.extra, 50000);
     expect(r.totalPengeluaran, 800000);
     expect(r.sisa, 200000);
     expect(r.copyWith(uangSaku: 500000).sisa, -300000);
     expect(r.copyWith(uangSaku: 800000).sisa, 0);
+  });
+
+  test('multiple extras sum exactly once and round-trip with names', () {
+    final r = report().copyWith(extras: const [
+      ExtraExpense(name: 'Parkir', amount: 20000),
+      ExtraExpense(name: 'Tol', amount: 150000),
+      ExtraExpense(name: 'Cuci bus', amount: 50000),
+    ]);
+    expect(r.extra, 220000);
+    expect(r.totalPengeluaran, 600000 + 100000 + 50000 + 220000);
+    final restored = Report.fromMap(r.toMap());
+    expect(restored.extras.map((item) => item.name),
+        ['Parkir', 'Tol', 'Cuci bus']);
+    expect(restored.extras.map((item) => item.amount), [20000, 150000, 50000]);
+    expect(restored.extra, 220000);
+    expect(restored.toMap(), r.toMap());
+  });
+
+  test('legacy extra amounts load as Extra lama with the same total', () {
+    final restored = Report.fromMap({
+      'id': 9,
+      'bbm': 100000,
+      'uang_makan': 50000,
+      'extra': 75000,
+      'tagihan': 25000,
+    });
+    expect(restored.extras, hasLength(1));
+    expect(restored.extras.single.name, 'Extra lama');
+    expect(restored.extras.single.amount, 75000);
+    expect(restored.extra, 75000);
+    expect(restored.totalPengeluaran, 250000);
+    final resaved = Report.fromMap(restored.toMap());
+    expect(resaved.extras.single.amount, 75000);
+    expect(resaved.totalPengeluaran, 250000);
+  });
+
+  test('malformed extra details fall back to the complete saved total', () {
+    for (final details in [
+      'not json',
+      '[]',
+      '[{"name":5,"amount":20000}]',
+      '[{"name":"Parkir","amount":"20000"}]',
+      '[{"name":"Parkir","amount":20000},null]',
+    ]) {
+      final restored = Report.fromMap({'extra': 75000, 'extra_details': details});
+      expect(restored.extras.single.name, 'Extra lama');
+      expect(restored.extra, 75000);
+    }
+  });
+
+  test('removing all extras clears the stored legacy total too', () {
+    final cleared = report().copyWith(extras: []);
+    expect(cleared.toMap()['extra'], 0);
+    expect(cleared.toMap()['extra_details'], '[]');
+    expect(Report.fromMap(cleared.toMap()).extras, isEmpty);
+    expect(cleared.totalPengeluaran, 750000);
   });
 
   test('km awal and km akhir persist as manual per-report inputs', () {
@@ -98,6 +158,54 @@ void main() {
                 TextEditingValue.empty, const TextEditingValue(text: ''))
             .text,
         '');
+  });
+
+  test('PDF lists each extra by name and keeps totals consistent', () async {
+    final doc = await ReportPdfBuilder.build(report());
+    final bytes = await doc.save();
+    final raw = latin1.decode(bytes);
+    final streams = <String>[];
+    for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true).allMatches(raw)) {
+      final data = latin1.encode(match.group(1)!);
+      try {
+        streams.add(latin1.decode(zlib.decode(data)));
+      } on FormatException {
+        streams.add(match.group(1)!);
+      }
+    }
+    final content = streams.join('\n');
+    expect(content, contains('Parkir'));
+    expect(content, contains('Tol'));
+    expect(content, contains('20.000'));
+    expect(content, contains('30.000'));
+    expect(content, contains('50.000'));
+    // PDF text streams can split words into separate drawing commands.
+    expect(content.indexOf('BBM'), lessThan(content.indexOf('Makan')));
+    expect(content.indexOf('Makan'), lessThan(content.indexOf('Tagihan')));
+    expect(content.indexOf('Tagihan'), lessThan(content.indexOf('Extra')));
+  });
+
+  test('PDF paginates many extras without dropping entries', () async {
+    final r = report().copyWith(extras: [
+      for (var i = 0; i < 80; i++)
+        ExtraExpense(name: 'Item${i.toString().padLeft(3, '0')}', amount: 1000),
+    ]);
+    final doc = await ReportPdfBuilder.build(r);
+    final raw = latin1.decode(await doc.save());
+    expect(RegExp(r'/Type\s*/Page\b').allMatches(raw).length, greaterThan(1));
+    final streams = <String>[];
+    for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true)
+        .allMatches(raw)) {
+      try {
+        streams.add(latin1.decode(zlib.decode(latin1.encode(match.group(1)!))));
+      } on FormatException {
+        streams.add(match.group(1)!);
+      }
+    }
+    final content = streams.join('\n');
+    expect(content, contains('Item000'));
+    expect(content, contains('Item079'));
+    expect(r.extra, 80000);
   });
 
   test('PDF contains manual KM and receipts without calculated distance', () async {

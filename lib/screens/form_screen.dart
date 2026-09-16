@@ -37,8 +37,10 @@ class _FormScreenState extends State<FormScreen> {
   late final TextEditingController _uangSaku;
   late final TextEditingController _bbm;
   late final TextEditingController _uangMakan;
-  late final TextEditingController _extra;
   late final TextEditingController _tagihan;
+  final List<TextEditingController> _extraNames = [];
+  final List<TextEditingController> _extraAmounts = [];
+  String? _extraError;
   final List<File> _attachments = [];
   List<String> _initialValues = [];
   List<String> _initialAttachments = [];
@@ -65,8 +67,9 @@ class _FormScreenState extends State<FormScreen> {
         _uangSaku,
         _bbm,
         _uangMakan,
-        _extra,
-        _tagihan
+        _tagihan,
+        ..._extraNames,
+        ..._extraAmounts,
       ];
   bool get _dirty =>
       !_loading &&
@@ -104,8 +107,13 @@ class _FormScreenState extends State<FormScreen> {
     _uangSaku = TextEditingController(text: amount(r?.uangSaku));
     _bbm = TextEditingController(text: amount(r?.bbm));
     _uangMakan = TextEditingController(text: amount(r?.uangMakan));
-    _extra = TextEditingController(text: amount(r?.extra));
     _tagihan = TextEditingController(text: amount(r?.tagihan));
+    if (r != null) {
+      for (final item in r.extras) {
+        _extraNames.add(TextEditingController(text: item.name));
+        _extraAmounts.add(TextEditingController(text: amount(item.amount)));
+      }
+    }
     for (final c in _controllers) {
       c.addListener(_changed);
     }
@@ -113,7 +121,7 @@ class _FormScreenState extends State<FormScreen> {
   }
 
   void _changed() {
-    if (mounted && !_loading) setState(() {});
+    if (mounted && !_loading) setState(() => _extraError = null);
   }
 
   Future<void> _loadInitialData() async {
@@ -280,7 +288,7 @@ class _FormScreenState extends State<FormScreen> {
                       onPressed: _busy
                           ? null
                           : _step < 2
-                              ? () => _goToStep(_step + 1)
+                              ? _nextStep
                               : _onSave,
                       icon: _saving
                           ? const SizedBox(
@@ -401,9 +409,9 @@ class _FormScreenState extends State<FormScreen> {
           const SizedBox(height: 16),
           _numberField(_uangMakan, 'Uang makan'),
           const SizedBox(height: 16),
-          _numberField(_extra, 'Extra'),
-          const SizedBox(height: 16),
           _numberField(_tagihan, 'Tagihan'),
+          const SizedBox(height: 16),
+          ..._extraFields(),
         ])),
         const SizedBox(height: 16),
         _balanceCard(),
@@ -704,6 +712,123 @@ class _FormScreenState extends State<FormScreen> {
     }
   }
 
+  List<Widget> _extraFields() => [
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Extra',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+        ),
+        const SizedBox(height: 4),
+        const Align(
+          alignment: Alignment.centerLeft,
+          child: Text(
+              'Tulis nama dan harga setiap pengeluaran extra. Semua harga dijumlahkan ke total.',
+              style: TextStyle(color: AppColors.muted, fontSize: 12)),
+        ),
+        const SizedBox(height: 12),
+        for (var i = 0; i < _extraNames.length; i++) ...[
+          Container(
+            key: ObjectKey(_extraNames[i]),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: AppColors.canvas,
+                borderRadius: BorderRadius.circular(12)),
+            child: Column(children: [
+              _text(_extraNames[i], 'Nama extra ${i + 1}',
+                  hint: 'Misalnya parkir, tol, atau cuci bus'),
+              const SizedBox(height: 12),
+              _numberField(_extraAmounts[i], 'Harga extra ${i + 1}'),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _busy ? null : () => _removeExtra(i),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  label: const Text('Hapus'),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (_extraError != null) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(_extraError!,
+                style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+          ),
+          const SizedBox(height: 8),
+        ],
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _addExtra,
+          icon: const Icon(Icons.add_rounded, size: 20),
+          label: const Text('Tambah Extra'),
+        ),
+      ];
+
+  void _addExtra() {
+    final name = TextEditingController();
+    final amount = TextEditingController();
+    name.addListener(_changed);
+    amount.addListener(_changed);
+    setState(() {
+      _extraNames.add(name);
+      _extraAmounts.add(amount);
+      _extraError = null;
+    });
+  }
+
+  void _removeExtra(int index) {
+    FocusScope.of(context).unfocus();
+    final name = _extraNames[index];
+    final amount = _extraAmounts[index];
+    name.removeListener(_changed);
+    amount.removeListener(_changed);
+    setState(() {
+      _extraNames.removeAt(index);
+      _extraAmounts.removeAt(index);
+      _extraError = null;
+    });
+    // Wait until the removed fields have unmounted before disposing controllers.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      name.dispose();
+      amount.dispose();
+    });
+  }
+
+  void _nextStep() {
+    if (_step == 1 && !_validateExtras()) {
+      showAppMessage(context, _extraError!);
+      return;
+    }
+    _goToStep(_step + 1);
+  }
+
+  /// Each added extra row must carry both a name and a positive price.
+  bool _validateExtras() {
+    for (var i = 0; i < _extraNames.length; i++) {
+      final name = _extraNames[i].text.trim();
+      final amount = parseRupiahInput(_extraAmounts[i].text);
+      final row = i + 1;
+      if (name.isEmpty && _extraAmounts[i].text.trim().isEmpty) {
+        setState(() => _extraError = 'Extra $row belum diisi. '
+            'Isi nama dan harga, atau hapus barisnya.');
+        return false;
+      }
+      if (name.isEmpty) {
+        setState(() =>
+            _extraError = 'Isi nama untuk extra $row, misalnya parkir.');
+        return false;
+      }
+      if (amount <= 0) {
+        setState(() =>
+            _extraError = 'Isi harga untuk "$name" lebih dari Rp 0.');
+        return false;
+      }
+    }
+    setState(() => _extraError = null);
+    return true;
+  }
+
   Report _buildReport() => Report(
         id: widget.report?.id,
         tanggalBuat: widget.report?.tanggalBuat ?? DateTime.now(),
@@ -718,15 +843,25 @@ class _FormScreenState extends State<FormScreen> {
         uangSaku: parseRupiahInput(_uangSaku.text),
         bbm: parseRupiahInput(_bbm.text),
         uangMakan: parseRupiahInput(_uangMakan.text),
-        extra: parseRupiahInput(_extra.text),
         tagihan: parseRupiahInput(_tagihan.text),
         namaCrew: _namaCrew.text.trim(),
         catatan: _catatan.text.trim(),
+        extras: [
+          for (var i = 0; i < _extraNames.length; i++)
+            ExtraExpense(
+                name: _extraNames[i].text.trim(),
+                amount: parseRupiahInput(_extraAmounts[i].text)),
+        ],
       );
 
   Future<void> _onSave() async {
     if (_busy || _loading) return;
     FocusScope.of(context).unfocus();
+    if (!_validateExtras()) {
+      _goToStep(1);
+      showAppMessage(context, _extraError!);
+      return;
+    }
     setState(() => _saving = true);
     try {
       await ReportStorage.save(_buildReport(), List<File>.of(_attachments));
@@ -747,6 +882,11 @@ class _FormScreenState extends State<FormScreen> {
   Future<void> _onPreview() async {
     if (_busy || _loading) return;
     FocusScope.of(context).unfocus();
+    if (!_validateExtras()) {
+      _goToStep(1);
+      showAppMessage(context, _extraError!);
+      return;
+    }
     setState(() => _previewing = true);
     try {
       final report = _buildReport();

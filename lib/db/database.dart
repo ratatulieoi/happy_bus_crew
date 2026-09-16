@@ -17,7 +17,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       p.join(dbPath, 'happy_bus.db'),
-      version: 6,
+      version: 7,
       onCreate: (db, v) async {
         await _createBusTable(db);
         await db.execute('''
@@ -36,6 +36,7 @@ class DatabaseHelper {
             bbm                INTEGER NOT NULL DEFAULT 0,
             uang_makan         INTEGER NOT NULL DEFAULT 0,
             extra              INTEGER NOT NULL DEFAULT 0,
+            extra_details      TEXT    NOT NULL DEFAULT '[]',
             tagihan            INTEGER NOT NULL DEFAULT 0,
             nama_crew          TEXT    NOT NULL DEFAULT '',
             catatan            TEXT    NOT NULL DEFAULT ''
@@ -106,6 +107,10 @@ class DatabaseHelper {
         if (oldVersion < 6) {
           await _createBusTable(db);
           await _importLegacyBuses(db);
+        }
+        if (oldVersion < 7) {
+          await db.execute(
+              "ALTER TABLE reports ADD COLUMN extra_details TEXT NOT NULL DEFAULT '[]'");
         }
       },
     );

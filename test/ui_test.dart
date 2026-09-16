@@ -36,7 +36,10 @@ Report fixture(
       uangSaku: allowance,
       bbm: 900000,
       uangMakan: 150000,
-      extra: 50000,
+      extras: const [
+        ExtraExpense(name: 'Parkir', amount: 20000),
+        ExtraExpense(name: 'Tol', amount: 30000),
+      ],
       tagihan: 100000,
       namaCrew: 'Budi Santoso',
       catatan: 'Perjalanan lancar.',
@@ -116,7 +119,7 @@ void main() {
           final values = args['arguments'] as List? ?? [];
           if (sql.contains('PRAGMA user_version')) {
             return [
-              {'user_version': 6}
+              {'user_version': 7}
             ];
           }
           if (sql.contains('FROM settings')) {
@@ -241,6 +244,23 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> reveal(WidgetTester tester, Finder target) async {
+    await tester.scrollUntilVisible(target, 250,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> fillExtra(
+      WidgetTester tester, int row, String name, String amount) async {
+    final nameField = find.widgetWithText(TextFormField, 'Nama extra $row');
+    final priceField = find.widgetWithText(TextFormField, 'Harga extra $row');
+    await reveal(tester, nameField);
+    await tester.enterText(nameField, name);
+    await reveal(tester, priceField);
+    await tester.enterText(priceField, amount);
+    await tester.pumpAndSettle();
+  }
+
   Future<void> capture(WidgetTester tester, String name) async {
     final directory = Platform.environment['UI_TEST_SCREENSHOT_DIR'];
     if (directory == null) return;
@@ -354,8 +374,7 @@ void main() {
     await capture(tester, 'report-finance');
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Uang saku'), '1000000');
-    await tester.drag(find.byType(ListView).first, const Offset(0, -550));
-    await tester.pumpAndSettle();
+    await reveal(tester, find.text('Defisit perjalanan'));
     expect(find.text('Defisit perjalanan'), findsOneWidget);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
@@ -371,6 +390,120 @@ void main() {
     await tester.tap(find.text('Lanjut mengisi'));
     await tester.pumpAndSettle();
     expect(find.byType(FormScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('extra rows can be added, edited and removed in expense order',
+      (tester) async {
+    await pumpScreen(tester, FormScreen(report: fixture()));
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await reveal(tester, find.text('Tambah Extra'));
+    final labels = ['BBM', 'Uang makan', 'Tagihan'];
+    final positions = [
+      for (final label in labels)
+        tester.getTopLeft(find.widgetWithText(TextFormField, label)).dy,
+      tester.getTopLeft(find.text('Extra')).dy,
+    ];
+    for (var i = 1; i < positions.length; i++) {
+      expect(positions[i], greaterThan(positions[i - 1]));
+    }
+    await tester.tap(find.text('Tambah Extra'));
+    await tester.pumpAndSettle();
+    await fillExtra(tester, 3, 'Cuci bus', '50000');
+    await fillExtra(tester, 2, 'Tol kota', '150000');
+    await reveal(tester, find.text('Hapus').first);
+    await tester.tap(find.text('Hapus').first);
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(TextFormField, 'Nama extra 3'), findsNothing);
+    expect(
+        tester.widget<TextFormField>(
+            find.widgetWithText(TextFormField, 'Nama extra 1')).controller!.text,
+        'Tol kota');
+    expect(
+        tester.widget<TextFormField>(
+            find.widgetWithText(TextFormField, 'Harga extra 1')).controller!.text,
+        '150.000');
+    await reveal(tester, find.text('Total pengeluaran'));
+    expect(find.text('Rp 1.350.000'), findsOneWidget);
+    for (var i = 0; i < 2; i++) {
+      await reveal(tester, find.text('Hapus').first);
+      await tester.tap(find.text('Hapus').first);
+      await tester.pumpAndSettle();
+    }
+    expect(find.widgetWithText(TextFormField, 'Nama extra 1'), findsNothing);
+    await reveal(tester, find.text('Total pengeluaran'));
+    expect(find.text('Rp 1.150.000'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('extra validation blocks incomplete rows on next, save and preview',
+      (tester) async {
+    await pumpScreen(tester, FormScreen(report: fixture().copyWith(extras: [])));
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await reveal(tester, find.text('Tambah Extra'));
+    await tester.tap(find.text('Tambah Extra'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('Extra 1 belum diisi'), findsWidgets);
+    await fillExtra(tester, 1, '', '20000');
+    await tester.tap(find.byTooltip('Pratinjau PDF tanpa menyimpan'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PreviewScreen), findsNothing);
+    expect(find.textContaining('Isi nama untuk extra 1'), findsWidgets);
+    await fillExtra(tester, 1, 'Parkir', '0');
+    // Step chips can bypass Next, but Save must still validate every extra.
+    await reveal(tester, find.text('3. Lampiran'));
+    await tester.tap(find.text('3. Lampiran'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Simpan laporan'));
+    await tester.pumpAndSettle();
+    expect(savedReport, isNull);
+    expect(find.textContaining('Isi harga untuk "Parkir"'), findsWidgets);
+    await fillExtra(tester, 1, 'Parkir', '20000');
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    expect(find.text('Lengkapi laporan'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('saving multiple extras retains names and prices when reopened',
+      (tester) async {
+    await pumpScreen(tester, const HomeScreen());
+    await tester.tap(find.text('Buat laporan baru'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    for (var i = 1; i <= 2; i++) {
+      await reveal(tester, find.text('Tambah Extra'));
+      await tester.tap(find.text('Tambah Extra'));
+      await tester.pumpAndSettle();
+      await fillExtra(tester, i, i == 1 ? 'Parkir' : 'Tol',
+          i == 1 ? '20000' : '150000');
+    }
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Simpan laporan'));
+    await tester.pumpAndSettle();
+    expect(find.byType(HomeScreen), findsOneWidget);
+    final restored = Report.fromMap(savedReport!);
+    expect(restored.extras.map((item) => item.name), ['Parkir', 'Tol']);
+    expect(restored.extras.map((item) => item.amount), [20000, 150000]);
+    expect(restored.totalPengeluaran, 170000);
+    await pumpScreen(tester, FormScreen(report: restored));
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await reveal(tester, find.text('Tambah Extra'));
+    expect(
+        tester.widget<TextFormField>(
+            find.widgetWithText(TextFormField, 'Nama extra 2')).controller!.text,
+        'Tol');
+    expect(
+        tester.widget<TextFormField>(
+            find.widgetWithText(TextFormField, 'Harga extra 2')).controller!.text,
+        '150.000');
     expect(tester.takeException(), isNull);
   });
 

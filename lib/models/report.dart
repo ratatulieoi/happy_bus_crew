@@ -1,7 +1,31 @@
+import 'dart:convert';
+
+/// Satu baris pengeluaran extra: nama item dan harga rupiah.
+///
+/// Extra selalu berupa daftar berpasangan nama-harga agar setiap
+/// pengeluaran tercatat rinci, bukan satu angka gabungan.
+class ExtraExpense {
+  final String name;
+  final int amount;
+
+  const ExtraExpense({required this.name, required this.amount});
+
+  Map<String, dynamic> toMap() => {'name': name, 'amount': amount};
+
+  factory ExtraExpense.fromMap(Map<String, dynamic> map) {
+    final name = map['name'];
+    final amount = map['amount'];
+    if (name is! String || amount is! int) {
+      throw const FormatException('Invalid extra expense');
+    }
+    return ExtraExpense(name: name.trim(), amount: amount);
+  }
+}
+
 /// Model data untuk Laporan Pertanggungjawaban Crew.
 ///
 /// Satu [Report] berisi seluruh field pada form: info header, kilometer,
-/// field keuangan (uang saku, BBM, uang makan, extra, tagihan),
+/// field keuangan (uang saku, BBM, uang makan, tagihan, daftar extra),
 /// serta data tanda tangan crew.
 
 class Report {
@@ -24,8 +48,11 @@ class Report {
   int uangSaku;
   int bbm;
   int uangMakan;
-  int extra;
   int tagihan;
+
+  /// Daftar pengeluaran extra, masing-masing bernama dan berharga.
+  /// Total extra adalah jumlah seluruh harga dan dihitung tepat sekali.
+  final List<ExtraExpense> extras;
 
   // --- Tanda tangan ---
   String namaCrew; // nama pembuat laporan (penanda tangan)
@@ -47,14 +74,18 @@ class Report {
     required this.uangSaku,
     required this.bbm,
     required this.uangMakan,
-    required this.extra,
     required this.tagihan,
     required this.namaCrew,
     this.catatan = '',
-  }) : tanggalBuat = tanggalBuat ?? DateTime.now();
+    List<ExtraExpense>? extras,
+  })  : tanggalBuat = tanggalBuat ?? DateTime.now(),
+        extras = List.unmodifiable(extras ?? const <ExtraExpense>[]);
 
-  /// Total pengeluaran = BBM + Uang Makan + Extra + Tagihan.
-  int get totalPengeluaran => bbm + uangMakan + extra + tagihan;
+  /// Jumlah seluruh harga extra. Setiap harga dihitung tepat satu kali.
+  int get extra => extras.fold(0, (sum, item) => sum + item.amount);
+
+  /// Total pengeluaran = BBM + Uang Makan + Tagihan + jumlah Extra.
+  int get totalPengeluaran => bbm + uangMakan + tagihan + extra;
 
   /// Sisa = Uang Saku - total pengeluaran.
   int get sisa => uangSaku - totalPengeluaran;
@@ -79,6 +110,7 @@ class Report {
       'bbm': bbm,
       'uang_makan': uangMakan,
       'extra': extra,
+      'extra_details': jsonEncode([for (final item in extras) item.toMap()]),
       'tagihan': tagihan,
       'nama_crew': namaCrew,
       'catatan': catatan,
@@ -101,11 +133,38 @@ class Report {
       uangSaku: map['uang_saku'] as int? ?? 0,
       bbm: map['bbm'] as int? ?? 0,
       uangMakan: map['uang_makan'] as int? ?? 0,
-      extra: map['extra'] as int? ?? 0,
       tagihan: map['tagihan'] as int? ?? 0,
+      extras: _extrasFromMap(map),
       namaCrew: map['nama_crew'] as String? ?? '',
       catatan: map['catatan'] as String? ?? '',
     );
+  }
+
+  /// Read named extras, or preserve a legacy total as an 'Extra lama' item.
+  /// Reject malformed details as a whole rather than silently losing items.
+  static List<ExtraExpense> _extrasFromMap(Map<String, dynamic> map) {
+    final details = map['extra_details'];
+    if (details is String && details.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(details);
+        if (decoded is List) {
+          final items = <ExtraExpense>[];
+          for (final entry in decoded) {
+            if (entry is! Map<String, dynamic>) {
+              throw const FormatException('Invalid extra expense');
+            }
+            items.add(ExtraExpense.fromMap(entry));
+          }
+          // Rincian kosong atau rusak: lanjut ke angka lama agar total aman.
+          if (items.isNotEmpty) return items;
+        }
+      } on FormatException {
+        // Rincian rusak: gunakan angka lama di bawah agar total aman.
+      }
+    }
+    final legacy = map['extra'] as int? ?? 0;
+    if (legacy != 0) return [ExtraExpense(name: 'Extra lama', amount: legacy)];
+    return const [];
   }
 
   /// Salinan dengan satu field diubah — mempermudah update dari form.
@@ -123,8 +182,8 @@ class Report {
     int? uangSaku,
     int? bbm,
     int? uangMakan,
-    int? extra,
     int? tagihan,
+    List<ExtraExpense>? extras,
     String? namaCrew,
     String? catatan,
   }) {
@@ -142,8 +201,8 @@ class Report {
       uangSaku: uangSaku ?? this.uangSaku,
       bbm: bbm ?? this.bbm,
       uangMakan: uangMakan ?? this.uangMakan,
-      extra: extra ?? this.extra,
       tagihan: tagihan ?? this.tagihan,
+      extras: extras ?? this.extras,
       namaCrew: namaCrew ?? this.namaCrew,
       catatan: catatan ?? this.catatan,
     );

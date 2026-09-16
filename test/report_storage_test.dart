@@ -27,7 +27,6 @@ void main() {
         uangSaku: 100,
         bbm: 20,
         uangMakan: 0,
-        extra: 0,
         tagihan: 0,
         namaCrew: 'Budi',
       );
@@ -60,7 +59,7 @@ void main() {
           return {'id': 1};
         case 'query':
           return [
-            {'user_version': 6}
+            {'user_version': 7}
           ];
         case 'execute':
           return null;
