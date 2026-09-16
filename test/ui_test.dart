@@ -553,7 +553,7 @@ void main() {
     await tester.tap(find.text('Hapus bus'));
     await tester.pumpAndSettle();
     expect(settings['selected_bus_id'], isNull);
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.text('Happy Bus 01'), findsOneWidget);
@@ -574,7 +574,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(buses, isEmpty);
     expect(settings['selected_bus_id'], isNull);
-    await tester.pageBack();
+    await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     expect(find.text('Tambahkan bus pertama'), findsOneWidget);
     expect(find.text('Belum bisa memuat data'), findsNothing);
@@ -605,7 +605,10 @@ void main() {
     await tester.enterText(search, 'L 9999 XX');
     await tester.pumpAndSettle();
     expect(find.text('Legacy driver'), findsOneWidget);
-    expect(find.text('L 9999 XX'), findsOneWidget);
+    expect(
+        find.byWidgetPredicate(
+            (widget) => widget is Text && widget.data == 'L 9999 XX'),
+        findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
