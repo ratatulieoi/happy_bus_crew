@@ -18,12 +18,13 @@ import 'package:sqflite/sqflite.dart';
 
 Report fixture(
         {int id = 1,
+        DateTime? tanggalBuat,
         String plate = 'B 1001 XX',
         String driver = 'Budi Santoso',
         int allowance = 2000000}) =>
     Report(
       id: id,
-      tanggalBuat: DateTime(2026, 6, 12),
+      tanggalBuat: tanggalBuat ?? DateTime(2026, 6, 12),
       hariTglBerangkat: 'Jumat, 12/06/2026',
       jamBerangkat: '08:00',
       hariTglKembali: 'Sabtu, 13/06/2026',
@@ -51,6 +52,7 @@ void main() {
   Map<String, Object?>? savedReport;
   var failQueries = false;
   var failBusSave = false;
+  var failBusDelete = false;
   final captureKey = GlobalKey();
 
   setUpAll(() async {
@@ -81,7 +83,12 @@ void main() {
     settingsWritten.clear();
     reports = [
       fixture(),
-      fixture(id: 2, plate: 'B 1002 XX', driver: 'Dedi', allowance: 500000)
+      fixture(
+          id: 2,
+          tanggalBuat: DateTime(2026, 6, 11),
+          plate: 'B 1002 XX',
+          driver: 'Dedi',
+          allowance: 500000)
     ];
     buses
       ..clear()
@@ -92,6 +99,7 @@ void main() {
     savedReport = null;
     failQueries = false;
     failBusSave = false;
+    failBusDelete = false;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(const MethodChannel('com.tekartik.sqflite'),
             (call) async {
@@ -123,13 +131,31 @@ void main() {
           if (sql.contains('MAX(km_akhir)')) {
             fail('Mileage tracking queries must not run.');
           }
+          if (sql.contains('FROM reports') &&
+              sql.contains('UPPER(TRIM(no_polisi))')) {
+            final plate = (values.first as String).toUpperCase();
+            return reports
+                .where((report) => report.noPolisi.trim().toUpperCase() == plate)
+                .take(1)
+                .map((report) => {'id': report.id})
+                .toList();
+          }
           if (sql.contains('FROM buses')) {
             return sql.contains('WHERE id = ?')
                 ? buses.where((bus) => bus['id'] == values.first).toList()
                 : buses;
           }
           if (sql.contains('FROM reports')) {
-            return reports.map((r) => r.toMap()).toList();
+            final rows = reports.map((r) => r.toMap()).toList();
+            if (sql.contains('ORDER BY')) {
+              rows.sort((a, b) {
+                final date = (b['tanggal_buat'] as String)
+                    .compareTo(a['tanggal_buat'] as String);
+                if (date != 0) return date;
+                return (b['id'] as int).compareTo(a['id'] as int);
+              });
+            }
+            return rows;
           }
           return <Map<String, Object?>>[];
         case 'insert':
@@ -144,18 +170,27 @@ void main() {
             buses.add({'id': id, 'name': values[0], 'plate': values[1]});
             return id;
           } else if (sql.contains('INTO reports')) {
-            final columns = sql.substring(sql.indexOf('(') + 1, sql.indexOf(')'))
-                .split(',').map((column) => column.trim()).toList();
+            final columns = sql
+                .substring(sql.indexOf('(') + 1, sql.indexOf(')'))
+                .split(',')
+                .map((column) => column.trim())
+                .toList();
             savedReport = Map.fromIterables(columns, values.cast<Object?>());
           }
           return 3;
+        // Sqflite sends both UPDATE and DELETE through this method.
         case 'update':
           final sql = args['sql'] as String;
+          final values = args['arguments'] as List;
           if (sql.startsWith('UPDATE buses')) {
-            final values = args['arguments'] as List;
             final bus = buses.firstWhere((bus) => bus['id'] == values.last);
             bus['name'] = values[0];
             bus['plate'] = values[1];
+          } else if (sql.startsWith('DELETE FROM buses')) {
+            if (failBusDelete) throw PlatformException(code: 'disk_error');
+            buses.removeWhere((bus) => bus['id'] == values.first);
+          } else if (sql.startsWith('DELETE FROM settings')) {
+            settings.remove(values.first);
           }
           return 1;
         case 'execute':
@@ -241,13 +276,17 @@ void main() {
     expect(find.text('Isi nama bus.'), findsOneWidget);
     expect(find.text('Isi nomor polisi.'), findsOneWidget);
     expect(buses, isEmpty);
-    await tester.enterText(find.widgetWithText(TextFormField, 'Nama bus'), 'Bus pertama');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Nomor polisi'), ' b 9999 xy ');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nama bus'), 'Bus pertama');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nomor polisi'), ' b 9999 xy ');
     await tester.tap(find.text('Simpan bus'));
     await tester.pumpAndSettle();
     expect(find.byType(HomeScreen), findsOneWidget);
     expect(find.text('Bus pertama'), findsOneWidget);
-    expect(buses, [{'id': 1, 'name': 'Bus pertama', 'plate': 'B 9999 XY'}]);
+    expect(buses, [
+      {'id': 1, 'name': 'Bus pertama', 'plate': 'B 9999 XY'}
+    ]);
     expect(settings, {'selected_bus_id': '1'});
     expect(tester.takeException(), isNull);
   });
@@ -255,9 +294,10 @@ void main() {
   testWidgets('dashboard loads, searches, filters and opens edit',
       (tester) async {
     await pumpScreen(tester, const HomeScreen());
-    expect(find.text('Happy Bus 01'), findsOneWidget);
+    expect(find.text('Happy Bus 01'), findsWidgets);
     expect(find.text('Kilometer terakhir'), findsNothing);
     expect(find.text('Jarak tempuh'), findsNothing);
+    expect(find.text('Tersimpan di perangkat'), findsNothing);
     await capture(tester, 'home');
     final search = find.byType(TextField);
     await tester.ensureVisible(search);
@@ -265,14 +305,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
     await tester.pumpAndSettle();
-    expect(find.text('Dedi'), findsNWidgets(2));
-    expect(find.text('Budi Santoso'), findsNothing);
+    expect(find.text('Happy Bus 02 • Dedi'), findsOneWidget);
+    expect(find.text('Happy Bus 01 • Budi Santoso'), findsNothing);
     await tester.tap(find.byTooltip('Hapus pencarian'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bus aktif'));
     await tester.pumpAndSettle();
-    expect(find.text('Dedi'), findsNothing);
-    expect(find.text('Budi Santoso'), findsOneWidget);
+    expect(find.text('Happy Bus 02 • Dedi'), findsNothing);
+    expect(find.text('Happy Bus 01 • Budi Santoso'), findsOneWidget);
     await tester.tap(find.byTooltip('Tindakan laporan').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ubah laporan'));
@@ -334,7 +374,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('new report uses selected plate and saves manual KM without tracking',
+  testWidgets(
+      'new report uses selected plate and saves manual KM without tracking',
       (tester) async {
     await pumpScreen(tester, const HomeScreen());
     await tester.tap(find.text('Buat laporan baru'));
@@ -399,10 +440,10 @@ void main() {
     expect(find.byIcon(Icons.oil_barrel_outlined), findsNothing);
     await tester.tap(find.byTooltip('Daftar bus'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Happy Bus 01'));
+    await tester.tap(find.text('Happy Bus 01').last);
     await tester.pumpAndSettle();
     expect(find.byType(HomeScreen), findsOneWidget);
-    expect(find.text('Happy Bus 01'), findsOneWidget);
+    expect(find.text('Happy Bus 01'), findsWidgets);
     expect(find.text('124.850 km'), findsNothing);
     expect(settingsRead.where((key) => key.contains('_oil_')), isEmpty);
     expect(settingsWritten.where((key) => key.contains('_oil_')), isEmpty);
@@ -422,8 +463,10 @@ void main() {
     await tester.tap(find.text('Tambah bus'));
     await tester.pumpAndSettle();
     await capture(tester, 'add-bus');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Nama bus'), 'Bus wisata');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Nomor polisi'), 'L 8888 AB');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nama bus'), 'Bus wisata');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nomor polisi'), 'L 8888 AB');
     failBusSave = true;
     await tester.tap(find.text('Simpan bus'));
     await tester.pumpAndSettle();
@@ -440,7 +483,129 @@ void main() {
     expect(settings['selected_bus_id'], '3');
     await tester.tap(find.text('Buat laporan baru'));
     await tester.pumpAndSettle();
-    expect(tester.widget<TextFormField>(find.widgetWithText(TextFormField, 'Nomor polisi')).controller!.text, 'L 8888 AB');
+    expect(
+        tester
+            .widget<TextFormField>(
+                find.widgetWithText(TextFormField, 'Nomor polisi'))
+            .controller!
+            .text,
+        'L 8888 AB');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('used buses explain why deletion is disabled', (tester) async {
+    await pumpScreen(tester, const BusListScreen());
+    expect(find.text('Memiliki laporan tersimpan dan tidak dapat dihapus.'),
+        findsNWidgets(2));
+    for (final plate in ['B 1001 XX', 'B 1002 XX']) {
+      final deleteButton = find.byWidgetPredicate(
+          (widget) => widget is IconButton && widget.tooltip == 'Hapus $plate');
+      expect(tester.widget<IconButton>(deleteButton).onPressed, isNull);
+    }
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('unused bus deletion can be cancelled and retried after failure',
+      (tester) async {
+    reports = [fixture()];
+    final originalReports = reports.map((report) => report.toMap()).toList();
+    await pumpScreen(tester, const HomeScreen());
+    await tester.tap(find.byTooltip('Daftar bus'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Hapus B 1002 XX'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Batal'));
+    await tester.pumpAndSettle();
+    expect(buses, hasLength(2));
+
+    failBusDelete = true;
+    await tester.tap(find.byTooltip('Hapus B 1002 XX'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hapus bus'));
+    await tester.pumpAndSettle();
+    expect(buses, hasLength(2));
+    expect(find.text('Bus belum dapat dihapus. Coba lagi.'), findsOneWidget);
+
+    failBusDelete = false;
+    await tester.tap(find.byTooltip('Hapus B 1002 XX'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hapus bus'));
+    await tester.pumpAndSettle();
+    expect(buses.map((bus) => bus['id']), [1]);
+    expect(settings['selected_bus_id'], '1');
+    expect(find.text('Bus dihapus.'), findsOneWidget);
+    expect(reports.map((report) => report.toMap()).toList(), originalReports);
+    await tester.tap(find.text('Happy Bus 01'));
+    await tester.pumpAndSettle();
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('deleting the active bus falls back to the remaining bus',
+      (tester) async {
+    reports = [fixture()];
+    settings['selected_bus_id'] = '2';
+    await pumpScreen(tester, const HomeScreen());
+    await tester.tap(find.byTooltip('Daftar bus'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Hapus B 1002 XX'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hapus bus'));
+    await tester.pumpAndSettle();
+    expect(settings['selected_bus_id'], isNull);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.text('Happy Bus 01'), findsOneWidget);
+    expect(find.text('Happy Bus 02'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('deleting the last bus returns to setup and allows a replacement',
+      (tester) async {
+    reports = [];
+    buses.removeLast();
+    await pumpScreen(tester, const HomeScreen());
+    await tester.tap(find.byTooltip('Daftar bus'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('Hapus B 1001 XX'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Hapus bus'));
+    await tester.pumpAndSettle();
+    expect(buses, isEmpty);
+    expect(settings['selected_bus_id'], isNull);
+    await tester.pageBack();
+    await tester.pumpAndSettle();
+    expect(find.text('Tambahkan bus pertama'), findsOneWidget);
+    expect(find.text('Belum bisa memuat data'), findsNothing);
+    await tester.tap(find.text('Tambah bus'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nama bus'), 'Pengganti');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nomor polisi'), 'L 9999 XX');
+    await tester.tap(find.text('Simpan bus'));
+    await tester.pumpAndSettle();
+    expect(find.byType(HomeScreen), findsOneWidget);
+    expect(find.text('Pengganti'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('history shows and searches bus names with a legacy plate fallback',
+      (tester) async {
+    reports.add(fixture(id: 3, plate: 'L 9999 XX', driver: 'Legacy driver'));
+    await pumpScreen(tester, const HomeScreen());
+    final search = find.byType(TextField);
+    await tester.enterText(search, 'Happy Bus 02');
+    await tester.pumpAndSettle();
+    await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(find.text('Happy Bus 02 • Dedi'), findsOneWidget);
+    expect(find.text('Happy Bus 01 • Budi Santoso'), findsNothing);
+    await tester.enterText(search, 'L 9999 XX');
+    await tester.pumpAndSettle();
+    expect(find.text('Legacy driver'), findsOneWidget);
+    expect(find.text('L 9999 XX'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -453,8 +618,10 @@ void main() {
     await tester.tap(find.byTooltip('Ubah B 1001 XX'));
     await tester.pumpAndSettle();
     expect(find.text('Ubah bus'), findsOneWidget);
-    await tester.enterText(find.widgetWithText(TextFormField, 'Nama bus'), 'Bus baru');
-    await tester.enterText(find.widgetWithText(TextFormField, 'Nomor polisi'), 'L 7777 ZZ');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nama bus'), 'Bus baru');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Nomor polisi'), 'L 7777 ZZ');
     await tester.tap(find.text('Simpan bus'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Bus baru'));
@@ -466,15 +633,34 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('editing a report retains its plate and manual KM after bus changes',
+  testWidgets(
+      'editing a report retains its plate and manual KM after bus changes',
       (tester) async {
     settings['selected_bus_id'] = '2';
     await pumpScreen(tester, FormScreen(report: fixture()));
-    expect(tester.widget<TextFormField>(find.widgetWithText(TextFormField, 'Nomor polisi')).controller!.text, 'B 1001 XX');
+    expect(
+        tester
+            .widget<TextFormField>(
+                find.widgetWithText(TextFormField, 'Nomor polisi'))
+            .controller!
+            .text,
+        'B 1001 XX');
     await tester.drag(find.byType(ListView).first, const Offset(0, -900));
     await tester.pumpAndSettle();
-    expect(tester.widget<TextFormField>(find.widgetWithText(TextFormField, 'KM awal')).controller!.text, '124.000');
-    expect(tester.widget<TextFormField>(find.widgetWithText(TextFormField, 'KM akhir')).controller!.text, '124.850');
+    expect(
+        tester
+            .widget<TextFormField>(
+                find.widgetWithText(TextFormField, 'KM awal'))
+            .controller!
+            .text,
+        '124.000');
+    expect(
+        tester
+            .widget<TextFormField>(
+                find.widgetWithText(TextFormField, 'KM akhir'))
+            .controller!
+            .text,
+        '124.850');
     expect(find.text('Jarak tempuh'), findsNothing);
     expect(tester.takeException(), isNull);
   });
@@ -528,6 +714,33 @@ void main() {
             .widget<FilledButton>(find.widgetWithText(FilledButton, 'Simpan'))
             .onPressed,
         isNull);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('receipt step offers camera and gallery', (tester) async {
+    await pumpScreen(tester, FormScreen(report: fixture()));
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    for (var i = 0; i < 6; i++) {
+      await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+      await tester.pumpAndSettle();
+    }
+    expect(find.text('Kamera'), findsOneWidget);
+    expect(find.text('Galeri'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('preview offers save share and print', (tester) async {
+    await pumpScreen(
+        tester,
+        PreviewScreen(report: fixture(), attachmentImages: [
+          Uint8List.fromList([1, 2, 3])
+        ]));
+    expect(find.text('Bagikan'), findsOneWidget);
+    expect(find.text('Simpan'), findsOneWidget);
+    expect(find.text('Cetak'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 }

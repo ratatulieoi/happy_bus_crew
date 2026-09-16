@@ -16,6 +16,7 @@ class BusListScreen extends StatefulWidget {
 
 class _BusListScreenState extends State<BusListScreen> {
   List<Bus> _buses = [];
+  Map<int, bool> _usedByReports = {};
   int? _selectedId;
   bool _loading = true;
   bool _busy = false;
@@ -36,8 +37,13 @@ class _BusListScreenState extends State<BusListScreen> {
       final db = DatabaseHelper.instance;
       final buses = await db.getBuses();
       final selected = await db.getSelectedBus();
+      final usage = <int, bool>{};
+      for (final bus in buses) {
+        usage[bus.id] = await db.isBusUsed(bus);
+      }
       if (!mounted) return;
       setState(() {
+        _usedByReports = usage;
         _buses = buses;
         _selectedId = selected?.id;
         _loading = false;
@@ -67,6 +73,43 @@ class _BusListScreenState extends State<BusListScreen> {
     if (saved == true) {
       await _load();
       if (mounted && widget.requireBus && _buses.isNotEmpty) await _finish();
+    }
+  }
+
+  Future<void> _deleteBus(Bus bus) async {
+    if (_busy) return;
+    final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+              title: const Text('Hapus bus ini?'),
+              content: Text(
+                  '${bus.name} (${bus.plate}) akan dihapus dari daftar bus. Tindakan ini tidak dapat dibatalkan.'),
+              actions: [
+                TextButton(
+                    onPressed: () => Navigator.pop(ctx, false),
+                    child: const Text('Batal')),
+                FilledButton(
+                    style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.danger),
+                    onPressed: () => Navigator.pop(ctx, true),
+                    child: const Text('Hapus bus'))
+              ],
+            ));
+    if (confirmed != true || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await DatabaseHelper.instance.deleteBus(bus.id);
+      if (!mounted) return;
+      showAppMessage(context, 'Bus dihapus.');
+      await _load();
+    } on StateError catch (error) {
+      if (mounted) showAppMessage(context, error.message);
+    } catch (_) {
+      if (mounted) {
+        showAppMessage(context, 'Bus belum dapat dihapus. Coba lagi.');
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -133,26 +176,59 @@ class _BusListScreenState extends State<BusListScreen> {
                               padding: const EdgeInsets.only(bottom: 12),
                               child: SectionCard(
                                 padding: EdgeInsets.zero,
-                                child: ListTile(
-                                  enabled: !_busy,
-                                  contentPadding: const EdgeInsets.symmetric(
-                                      horizontal: 16, vertical: 8),
-                                  leading: Icon(
-                                      bus.id == _selectedId
-                                          ? Icons.check_circle
-                                          : Icons.directions_bus_outlined,
-                                      color: bus.id == _selectedId
-                                          ? AppColors.brand
-                                          : AppColors.muted),
-                                  title: Text(bus.name),
-                                  subtitle: Text(bus.plate),
-                                  onTap: () => _select(bus),
-                                  trailing: IconButton(
-                                    tooltip: 'Ubah ${bus.plate}',
-                                    onPressed:
-                                        _busy ? null : () => _editBus(bus),
-                                    icon: const Icon(Icons.edit_outlined),
-                                  ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    ListTile(
+                                      enabled: !_busy,
+                                      contentPadding:
+                                          const EdgeInsets.symmetric(
+                                              horizontal: 16, vertical: 8),
+                                      leading: Icon(
+                                          bus.id == _selectedId
+                                              ? Icons.check_circle
+                                              : Icons.directions_bus_outlined,
+                                          color: bus.id == _selectedId
+                                              ? AppColors.brand
+                                              : AppColors.muted),
+                                      title: Text(bus.name),
+                                      subtitle: Text(bus.plate),
+                                      onTap: () => _select(bus),
+                                      trailing: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          IconButton(
+                                            tooltip: 'Ubah ${bus.plate}',
+                                            onPressed: _busy
+                                                ? null
+                                                : () => _editBus(bus),
+                                            icon:
+                                                const Icon(Icons.edit_outlined),
+                                          ),
+                                          IconButton(
+                                            tooltip: 'Hapus ${bus.plate}',
+                                            onPressed: _busy ||
+                                                    _usedByReports[bus.id] == true
+                                                ? null
+                                                : () => _deleteBus(bus),
+                                            color: AppColors.danger,
+                                            icon: const Icon(
+                                                Icons.delete_outline_rounded),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    if (_usedByReports[bus.id] == true)
+                                      const Padding(
+                                        padding:
+                                            EdgeInsets.fromLTRB(16, 0, 16, 12),
+                                        child: Text(
+                                            'Memiliki laporan tersimpan dan tidak dapat dihapus.',
+                                            style: TextStyle(
+                                                color: AppColors.muted,
+                                                fontSize: 12)),
+                                      ),
+                                  ],
                                 ),
                               ),
                             ),

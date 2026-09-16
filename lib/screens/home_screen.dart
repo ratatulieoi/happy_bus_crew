@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 
 import '../db/database.dart';
+import '../models/bus.dart';
 import '../models/report.dart';
 import '../ui/app_theme.dart';
 import '../ui/components.dart';
@@ -22,6 +23,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _search = TextEditingController();
   List<Report> _reports = [];
+  List<Bus> _buses = [];
   String _busName = '';
   String _plate = '';
   int _filter = 0;
@@ -72,11 +74,13 @@ class _HomeScreenState extends State<HomeScreen> {
       final db = DatabaseHelper.instance;
       final bus = await db.getSelectedBus();
       if (bus == null) throw StateError('Tambahkan bus terlebih dahulu.');
+      final buses = await db.getBuses();
       final reports = await db.getAllReports();
       if (!mounted) return;
       setState(() {
         _busName = bus.name;
         _plate = bus.plate;
+        _buses = buses;
         _reports = reports;
         _loading = false;
         _error = null;
@@ -94,7 +98,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _chooseBus() async {
     await Navigator.push<bool>(
         context, MaterialPageRoute(builder: (_) => const BusListScreen()));
-    if (mounted) await _refresh();
+    if (mounted) await _initialize();
   }
 
   Future<void> _edit([Report? report]) async {
@@ -106,12 +110,24 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  String _busNameForPlate(String plate) {
+    final clean = plate.trim().toUpperCase();
+    for (final bus in _buses) {
+      if (bus.plate.trim().toUpperCase() == clean) return bus.name;
+    }
+    return '';
+  }
+
   List<Report> get _filteredReports {
     final query = _search.text.trim().toLowerCase();
     return _reports.where((r) {
-      if (_filter == 1 && r.noPolisi != _plate) return false;
+      if (_filter == 1 &&
+          r.noPolisi.trim().toUpperCase() != _plate.trim().toUpperCase()) {
+        return false;
+      }
       if (_filter == 2 && r.sisa >= 0) return false;
-      return '${r.noPolisi} ${r.pengemudi} ${r.kernet} ${r.namaCrew} ${r.hariTglBerangkat} ${formatTanggalPendek(r.tanggalBuat)}'
+      final busName = _busNameForPlate(r.noPolisi);
+      return '${r.noPolisi} $busName ${r.pengemudi} ${r.kernet} ${r.namaCrew} ${r.hariTglBerangkat} ${formatTanggalPendek(r.tanggalBuat)}'
           .toLowerCase()
           .contains(query);
     }).toList();
@@ -161,12 +177,6 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                const StatusPill(
-                                    label: 'Tersimpan di perangkat',
-                                    icon: Icons.offline_pin_outlined,
-                                    color: AppColors.success,
-                                    background: AppColors.successSoft),
-                                const SizedBox(height: 16),
                                 Text('Laporan crew',
                                     style: Theme.of(context)
                                         .textTheme
@@ -193,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   onChanged: (_) => setState(() {}),
                                   decoration: InputDecoration(
                                     hintText:
-                                        'Cari plat, nama crew, atau tanggal',
+                                        'Cari bus, plat, crew, atau tanggal',
                                     prefixIcon:
                                         const Icon(Icons.search_rounded),
                                     suffixIcon: _search.text.isEmpty
@@ -331,6 +341,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _reportCard(Report report) {
     final deficit = report.sisa < 0;
+    final busName = _busNameForPlate(report.noPolisi);
+    final driver = report.pengemudi.isEmpty
+        ? 'Pengemudi belum diisi'
+        : report.pengemudi;
     return Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(
@@ -373,10 +387,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       : report.noPolisi,
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),
-              Text(
-                  report.pengemudi.isEmpty
-                      ? 'Pengemudi belum diisi'
-                      : report.pengemudi,
+              Text(busName.isEmpty ? driver : '$busName • $driver',
                   style: const TextStyle(color: AppColors.muted)),
               const Divider(height: 24),
               Padding(

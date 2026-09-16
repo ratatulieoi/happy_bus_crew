@@ -10,7 +10,8 @@ Dibuat dengan **Flutter**, menyimpan laporan secara lokal (SQLite), dan mengeksp
 Branch ini berasal dari `main` dan mempertahankan tampilan Flutter terbaru untuk laporan pertanggungjawaban crew. Semua data disimpan secara offline tanpa backend atau konfigurasi online.
 
 - Saat pertama membuka aplikasi, pengguna harus menambahkan satu bus dengan nama dan nomor polisi. Tidak ada enam slot bawaan.
-- Menu **Daftar bus** menyediakan tambah bus, ubah identitas bus, dan pilih bus untuk laporan baru.
+- Menu **Daftar bus** menyediakan tambah bus, ubah identitas bus, pilih bus, dan hapus bus yang belum digunakan dalam laporan. Penghapusan memerlukan konfirmasi. Bus dengan nomor polisi yang masih tercatat dalam laporan tidak dapat dihapus.
+- Riwayat laporan menampilkan nama bus yang nomor polisinya cocok dengan daftar bus saat ini. Pencarian menerima nama bus, nomor polisi, nama crew, dan tanggal. Jika nomor polisi lama tidak lagi cocok, laporan tetap menampilkan nomor polisi dan pengemudi.
 - **KM awal** dan **KM akhir** diisi manual pada setiap laporan. Keduanya tetap tampil di PDF. Tidak ada pelacakan kilometer, pengisian otomatis dari laporan sebelumnya, atau perhitungan jarak tempuh.
 - Pelacakan oli, pengingat ganti oli, dan pencatatan ganti oli tidak tersedia.
 - Laporan lama, lampiran struk, dan ekspor PDF tetap tersedia. Mengubah identitas bus tidak mengubah nomor polisi pada laporan lama.
@@ -50,6 +51,19 @@ flutter doctor
 ---
 
 ## 🚀 Menjalankan / Build
+
+### Build melalui GitHub
+
+Push ke `lpj-only` atau `main` menjalankan workflow **Build APK** dengan Flutter 3.27.4 dan Java 17. Workflow menjalankan analisis kode dan tes otomatis sebelum membuat APK Android.
+
+1. Buka tab **Actions** di GitHub dan pilih run **Build APK** untuk commit yang ingin diuji.
+2. Setelah run berhasil, unduh artifact **happy-bus-crew-apk**.
+3. Ekstrak ZIP, lalu pasang `app-release.apk` pada HP Android.
+4. Uji pengelolaan bus, penyimpanan laporan, kamera, dan ekspor PDF pada HP.
+
+Workflow juga dapat dijalankan secara manual melalui **Run workflow**. Pilih branch `lpj-only` untuk build fitur ini tanpa mengubah `main`.
+
+Tanpa keystore rilis, APK CI menggunakan kunci debug. Gunakan APK ini untuk pengujian perangkat, bukan distribusi produksi.
 
 ### 1. Pasang dependensi
 ```bash
@@ -93,7 +107,7 @@ happy_bus_crew/
     ├── pdf/
     │   └── report_pdf.dart   # builder dokumen PDF (layout laporan)
     └── screens/
-        ├── bus_list_screen.dart # tambah, ubah, dan pilih bus
+        ├── bus_list_screen.dart # tambah, ubah, pilih, dan hapus bus
         ├── home_screen.dart  # daftar laporan
         ├── form_screen.dart  # form input semua field
         └── preview_screen.dart # pratinjau PDF + simpan/bagikan/cetak

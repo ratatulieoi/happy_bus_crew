@@ -100,7 +100,8 @@ class DatabaseHelper {
           ''');
         }
         if (oldVersion < 5) {
-          await db.execute("ALTER TABLE reports ADD COLUMN catatan TEXT NOT NULL DEFAULT ''");
+          await db.execute(
+              "ALTER TABLE reports ADD COLUMN catatan TEXT NOT NULL DEFAULT ''");
         }
         if (oldVersion < 6) {
           await _createBusTable(db);
@@ -113,7 +114,8 @@ class DatabaseHelper {
 
   /// Commit report fields and the complete ordered receipt list together.
   /// A failed transaction leaves both the report and its old links unchanged.
-  Future<int> saveReportWithAttachments(Report report, List<String> paths) async {
+  Future<int> saveReportWithAttachments(
+      Report report, List<String> paths) async {
     final database = await db;
     return database.transaction((txn) async {
       final int id;
@@ -147,35 +149,42 @@ class DatabaseHelper {
   Future<void> updateReport(Report r) async {
     assert(r.id != null);
     final database = await db;
-    await database.update('reports', r.toMap(), where: 'id = ?', whereArgs: [r.id]);
+    await database
+        .update('reports', r.toMap(), where: 'id = ?', whereArgs: [r.id]);
   }
 
   /// Hapus laporan beserta lampirannya.
   Future<void> deleteReport(int id) async {
     final database = await db;
-    await database.delete('report_attachments', where: 'report_id = ?', whereArgs: [id]);
+    await database
+        .delete('report_attachments', where: 'report_id = ?', whereArgs: [id]);
     await database.delete('reports', where: 'id = ?', whereArgs: [id]);
   }
 
   /// Ambil satu laporan.
   Future<Report?> getReport(int id) async {
     final database = await db;
-    final rows = await database.query('reports', where: 'id = ?', whereArgs: [id]);
+    final rows =
+        await database.query('reports', where: 'id = ?', whereArgs: [id]);
     if (rows.isEmpty) return null;
     return Report.fromMap(rows.first);
   }
 
   /// Ambil seluruh laporan — diurutkan terbaru di atas.
+  /// Falls back to insertion order when timestamps are equal or missing,
+  /// so dashboard cards stay stable across identical saves.
   Future<List<Report>> getAllReports() async {
     final database = await db;
-    final rows = await database.query('reports', orderBy: 'tanggal_buat DESC');
+    final rows =
+        await database.query('reports', orderBy: 'tanggal_buat DESC, id DESC');
     return rows.map(Report.fromMap).toList();
   }
 
   /// Ambil nilai setting berdasarkan key.
   Future<String?> getSetting(String key) async {
     final database = await db;
-    final rows = await database.query('settings', where: 'key = ?', whereArgs: [key]);
+    final rows =
+        await database.query('settings', where: 'key = ?', whereArgs: [key]);
     if (rows.isEmpty) return null;
     return rows.first['value'] as String?;
   }
@@ -219,7 +228,10 @@ class DatabaseHelper {
     if (imported.isNotEmpty) {
       await db.insert(
           'settings',
-          {'key': 'selected_bus_id', 'value': '${selectedId ?? imported.values.first}'},
+          {
+            'key': 'selected_bus_id',
+            'value': '${selectedId ?? imported.values.first}'
+          },
           conflictAlgorithm: ConflictAlgorithm.replace);
     }
   }
@@ -241,14 +253,16 @@ class DatabaseHelper {
 
   Future<void> selectBus(int id) async {
     final database = await db;
-    if ((await database.query('buses', where: 'id = ?', whereArgs: [id])).isEmpty) {
+    if ((await database.query('buses', where: 'id = ?', whereArgs: [id]))
+        .isEmpty) {
       throw StateError('Bus tidak ditemukan.');
     }
     await setSetting('selected_bus_id', '$id');
   }
 
   /// Save bus identity and selection together, without changing past reports.
-  Future<int> saveBus({int? id, required String name, required String plate}) async {
+  Future<int> saveBus(
+      {int? id, required String name, required String plate}) async {
     final cleanName = name.trim();
     final cleanPlate = plate.trim().toUpperCase();
     if (cleanName.isEmpty || cleanPlate.isEmpty) {
@@ -261,14 +275,49 @@ class DatabaseHelper {
       if (id == null) {
         savedId = await txn.insert('buses', data);
       } else {
-        final updated = await txn.update('buses', data,
-            where: 'id = ?', whereArgs: [id]);
+        final updated =
+            await txn.update('buses', data, where: 'id = ?', whereArgs: [id]);
         if (updated != 1) throw StateError('Bus tidak ditemukan.');
         savedId = id;
       }
-      await txn.insert('settings', {'key': 'selected_bus_id', 'value': '$savedId'},
+      await txn.insert(
+          'settings', {'key': 'selected_bus_id', 'value': '$savedId'},
           conflictAlgorithm: ConflictAlgorithm.replace);
       return savedId;
+    });
+  }
+
+  /// Reports identify buses by plate, without a foreign key.
+  Future<bool> isBusUsed(Bus bus) async => _isBusUsed(await db, bus);
+
+  Future<bool> _isBusUsed(DatabaseExecutor executor, Bus bus) async {
+    final used = await executor.query('reports',
+        columns: ['id'],
+        where: 'UPPER(TRIM(no_polisi)) = ?',
+        whereArgs: [bus.plate.trim().toUpperCase()],
+        limit: 1);
+    return used.isNotEmpty;
+  }
+
+  /// Check report usage and delete the unused bus in one transaction.
+  /// Past reports and attachments are never changed.
+  Future<void> deleteBus(int id) async {
+    final database = await db;
+    await database.transaction((txn) async {
+      final buses = await txn.query('buses', where: 'id = ?', whereArgs: [id]);
+      if (buses.isEmpty) throw StateError('Bus tidak ditemukan.');
+      if (await _isBusUsed(txn, Bus.fromMap(buses.first))) {
+        throw StateError(
+            'Bus ini memiliki laporan tersimpan dan tidak dapat dihapus.');
+      }
+      await txn.delete('buses', where: 'id = ?', whereArgs: [id]);
+      final selected = await txn
+          .query('settings', where: 'key = ?', whereArgs: ['selected_bus_id']);
+      if (selected.isNotEmpty &&
+          int.tryParse(selected.first['value'] as String) == id) {
+        await txn.delete('settings',
+            where: 'key = ?', whereArgs: ['selected_bus_id']);
+      }
     });
   }
 
@@ -303,6 +352,7 @@ class DatabaseHelper {
   /// Hapus semua lampiran untuk sebuah laporan.
   Future<void> deleteAttachments(int reportId) async {
     final database = await db;
-    await database.delete('report_attachments', where: 'report_id = ?', whereArgs: [reportId]);
+    await database.delete('report_attachments',
+        where: 'report_id = ?', whereArgs: [reportId]);
   }
 }

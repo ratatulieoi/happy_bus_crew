@@ -93,6 +93,87 @@ void main() {
     expect((await store.getBuses()).last.name, 'Second');
   });
 
+  test('deleting an unused bus clears its selection and keeps the rest',
+      () async {
+    final first = await store.saveBus(name: 'First', plate: 'B 1001 XX');
+    final second = await store.saveBus(name: 'Second', plate: 'B 1002 XX');
+    expect((await store.getSelectedBus())!.id, second);
+    await store.deleteBus(second);
+    expect(await store.getSetting('selected_bus_id'), isNull);
+    expect((await store.getBuses()).map((bus) => bus.id), [first]);
+    expect((await store.getSelectedBus())!.id, first);
+    await store.close();
+    expect((await store.getBuses()).map((bus) => bus.id), [first]);
+    await expectLater(store.selectBus(second), throwsStateError);
+  });
+
+  test('deleting an inactive or missing bus preserves selection and history',
+      () async {
+    final first = await store.saveBus(name: 'Unused', plate: 'B 1001 XX');
+    final second = await store.saveBus(name: 'Active', plate: 'B 1002 XX');
+    final db = await store.db;
+    await db.insert('reports', {
+      'id': 7,
+      'tanggal_buat': '2026-09-15T08:00:00',
+      'no_polisi': 'B 1002 XX'
+    });
+    await db.insert('report_attachments',
+        {'report_id': 7, 'file_path': '/saved/receipt.jpg'});
+    final reportsBefore = await db.query('reports');
+    final receiptsBefore = await db.query('report_attachments');
+    await store.deleteBus(first);
+    await expectLater(store.deleteBus(first), throwsStateError);
+    expect((await store.getBuses()).map((bus) => bus.id), [second]);
+    expect(await store.getSetting('selected_bus_id'), '$second');
+    expect(await db.query('reports'), reportsBefore);
+    expect(await db.query('report_attachments'), receiptsBefore);
+  });
+
+  test('deleting the last bus clears selection and permits a new bus', () async {
+    final id = await store.saveBus(name: 'Only bus', plate: 'B 1001 XX');
+    await store.deleteBus(id);
+    await store.close();
+    expect(await store.getBuses(), isEmpty);
+    expect(await store.getSelectedBus(), isNull);
+    expect(await store.getSetting('selected_bus_id'), isNull);
+    final replacement =
+        await store.saveBus(name: 'Replacement', plate: 'B 1001 XX');
+    expect((await store.getSelectedBus())!.id, replacement);
+  });
+
+  test('failed selection cleanup rolls back the bus deletion', () async {
+    final id = await store.saveBus(name: 'Active', plate: 'B 1001 XX');
+    final db = await store.db;
+    await db.execute('''
+      CREATE TRIGGER fail_selection_delete BEFORE DELETE ON settings
+      BEGIN SELECT RAISE(ABORT, 'test failure'); END
+    ''');
+    await expectLater(store.deleteBus(id), throwsA(isA<DatabaseException>()));
+    expect((await store.getBuses()).single.id, id);
+    expect(await store.getSetting('selected_bus_id'), '$id');
+    await db.execute('DROP TRIGGER fail_selection_delete');
+    await store.deleteBus(id);
+    expect(await store.getBuses(), isEmpty);
+  });
+
+  test('a bus with saved reports cannot be deleted and keeps its selection',
+      () async {
+    final db = await store.db;
+    final first = await store.saveBus(name: 'First', plate: 'B 1001 XX');
+    await db.insert('reports', {
+      'id': 7,
+      'tanggal_buat': '2026-09-15T08:00:00',
+      'no_polisi': ' b 1001 xx ',
+      'km_awal': 123,
+      'km_akhir': 456
+    });
+    expect(await store.isBusUsed((await store.getBuses()).first), isTrue);
+    await expectLater(store.deleteBus(first), throwsStateError);
+    expect((await store.getBuses()).map((bus) => bus.id), [first]);
+    expect((await store.getSelectedBus())!.id, first);
+    expect((await db.query('reports')).single['no_polisi'], ' b 1001 xx ');
+  });
+
   test('editing bus identity keeps saved report plate, manual KM and receipts',
       () async {
     final id = await store.saveBus(name: 'First', plate: 'B 1001 XX');
