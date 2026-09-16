@@ -455,7 +455,9 @@ void main() {
     expect(find.textContaining('Isi nama untuk extra 1'), findsWidgets);
     await fillExtra(tester, 1, 'Parkir', '0');
     // Step chips can bypass Next, but Save must still validate every extra.
-    await reveal(tester, find.text('3. Lampiran'));
+    await tester.scrollUntilVisible(find.text('3. Lampiran'), -250,
+        scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
     await tester.tap(find.text('3. Lampiran'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Simpan laporan'));
