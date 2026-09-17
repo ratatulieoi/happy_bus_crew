@@ -34,8 +34,9 @@ void main() {
       (tester) async {
     await pumpViewer(tester);
     expect(find.text('1 / 2'), findsOneWidget);
-    expect(tester.widget<IconButton>(find.byTooltip('Halaman sebelumnya'))
-        .onPressed, isNull);
+    expect(tester.widget<IconButton>(find.byWidgetPredicate(
+        (widget) => widget is IconButton &&
+            widget.tooltip == 'Halaman sebelumnya')).onPressed, isNull);
     await tester.tap(find.byTooltip('Perbesar PDF'));
     await tester.pump();
     expect(controller(tester).value.getMaxScaleOnAxis(), closeTo(1.5, .001));
@@ -55,8 +56,9 @@ void main() {
     await tester.pump();
     expect(find.text('2 / 2'), findsOneWidget);
     expect(controller(tester).value.getMaxScaleOnAxis(), 1);
-    expect(tester.widget<IconButton>(find.byTooltip('Halaman berikutnya'))
-        .onPressed, isNull);
+    expect(tester.widget<IconButton>(find.byWidgetPredicate(
+        (widget) => widget is IconButton &&
+            widget.tooltip == 'Halaman berikutnya')).onPressed, isNull);
     await tester.tap(find.byTooltip('Halaman sebelumnya'));
     await tester.pump();
     expect(find.text('1 / 2'), findsOneWidget);
