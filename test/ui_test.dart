@@ -119,7 +119,7 @@ void main() {
           final values = args['arguments'] as List? ?? [];
           if (sql.contains('PRAGMA user_version')) {
             return [
-              {'user_version': 7}
+              {'user_version': 8}
             ];
           }
           if (sql.contains('FROM settings')) {
@@ -189,6 +189,14 @@ void main() {
             final bus = buses.firstWhere((bus) => bus['id'] == values.last);
             bus['name'] = values[0];
             bus['plate'] = values[1];
+          } else if (sql.startsWith('UPDATE reports')) {
+            final columns = sql
+                .substring(sql.indexOf(' SET ') + 5, sql.indexOf(' WHERE '))
+                .split(',')
+                .map((column) => column.split('=').first.trim())
+                .toList();
+            savedReport = Map.fromIterables(
+                columns, values.take(columns.length).cast<Object?>());
           } else if (sql.startsWith('DELETE FROM buses')) {
             if (failBusDelete) throw PlatformException(code: 'disk_error');
             buses.removeWhere((bus) => bus['id'] == values.first);
@@ -476,6 +484,8 @@ void main() {
     await pumpScreen(tester, const HomeScreen());
     await tester.tap(find.text('Buat laporan baru'));
     await tester.pumpAndSettle();
+    await reveal(tester, find.text('Dalam Kota'));
+    await tester.tap(find.text('Dalam Kota'));
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     for (var i = 1; i <= 2; i++) {
@@ -494,7 +504,10 @@ void main() {
     expect(restored.extras.map((item) => item.name), ['Parkir', 'Tol']);
     expect(restored.extras.map((item) => item.amount), [20000, 150000]);
     expect(restored.totalPengeluaran, 170000);
+    expect(restored.tripType, TripType.dalamKota);
     await pumpScreen(tester, FormScreen(report: restored));
+    expect(tester.widget<ChoiceChip>(
+        find.widgetWithText(ChoiceChip, 'Dalam Kota')).selected, isTrue);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     await reveal(tester, find.text('Tambah Extra'));
@@ -522,6 +535,8 @@ void main() {
             .controller!
             .text,
         'B 1001 XX');
+    await reveal(tester, find.text('Luar Kota'));
+    await tester.tap(find.text('Luar Kota'));
     await tester.drag(find.byType(ListView).first, const Offset(0, -900));
     await tester.pumpAndSettle();
     expect(
@@ -551,12 +566,78 @@ void main() {
     expect(savedReport?['km_awal'], 120);
     expect(savedReport?['km_akhir'], 480);
     expect(savedReport?['nama_crew'], 'Agus');
+    expect(savedReport?['trip_type'], 'luar_kota');
     await tester.tap(find.text('Buat laporan baru'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView).first, const Offset(0, -900));
     await tester.pumpAndSettle();
     expect(tester.widget<TextFormField>(kmAwal).controller!.text, '');
     expect(tester.widget<TextFormField>(kmAkhir).controller!.text, '');
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('new reports require trip type on next, preview and save',
+      (tester) async {
+    await pumpScreen(tester, const FormScreen());
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detail perjalanan'), findsOneWidget);
+    expect(find.text('Pilih Luar Kota atau Dalam Kota.'), findsWidgets);
+    await tester.tap(find.byTooltip('Pratinjau PDF tanpa menyimpan'));
+    await tester.pumpAndSettle();
+    expect(find.byType(PreviewScreen), findsNothing);
+    await tester.tap(find.text('3. Lampiran'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Simpan laporan'));
+    await tester.pumpAndSettle();
+    expect(savedReport, isNull);
+    expect(find.text('Detail perjalanan'), findsOneWidget);
+    await reveal(tester, find.text('Dalam Kota'));
+    await tester.tap(find.text('Dalam Kota'));
+    await tester.tap(find.byTooltip('Kembali'));
+    await tester.pumpAndSettle();
+    expect(find.text('Keluar tanpa menyimpan?'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('trip type edit is retained and legacy reports can stay unspecified',
+      (tester) async {
+    await pumpScreen(tester, const HomeScreen());
+    await reveal(tester, find.byTooltip('Tindakan laporan').first);
+    await tester.tap(find.byTooltip('Tindakan laporan').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ubah laporan'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<ChoiceChip>(
+        find.widgetWithText(ChoiceChip, 'Luar Kota')).selected, isFalse);
+    expect(tester.widget<ChoiceChip>(
+        find.widgetWithText(ChoiceChip, 'Dalam Kota')).selected, isFalse);
+    await tester.tap(find.text('3. Lampiran'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Simpan laporan'));
+    await tester.pumpAndSettle();
+    expect(savedReport?['trip_type'], '');
+    expect(find.byType(HomeScreen), findsOneWidget);
+
+    reports[0] = fixture().copyWith(tripType: TripType.luarKota);
+    await tester.tap(find.byTooltip('Muat ulang'));
+    await tester.pumpAndSettle();
+    await reveal(tester, find.byTooltip('Tindakan laporan').first);
+    await tester.tap(find.byTooltip('Tindakan laporan').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Ubah laporan'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<ChoiceChip>(
+        find.widgetWithText(ChoiceChip, 'Luar Kota')).selected, isTrue);
+    await reveal(tester, find.text('Dalam Kota'));
+    await tester.tap(find.text('Dalam Kota'));
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Simpan laporan'));
+    await tester.pumpAndSettle();
+    expect(savedReport?['trip_type'], 'dalam_kota');
     expect(tester.takeException(), isNull);
   });
 

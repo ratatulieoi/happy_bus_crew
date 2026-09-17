@@ -36,6 +36,7 @@ void main() {
       'bbm': 600000,
       'uang_makan': 100000,
       'tagihan': 50000,
+      'trip_type': 'luar_kota',
     }).copyWith(extras: const [
       ExtraExpense(name: 'Parkir', amount: 20000),
       ExtraExpense(name: 'Tol', amount: 30000),
@@ -46,19 +47,21 @@ void main() {
     final restored = (await store.getReport(id))!;
     expect(restored.extras.map((item) => item.name), ['Parkir', 'Tol']);
     expect(restored.extras.map((item) => item.amount), [20000, 30000]);
+    expect(restored.tripType, TripType.luarKota);
     expect(restored.extra, 50000);
     expect(restored.totalPengeluaran, 800000);
     expect(restored.kmAwal, 123);
     expect(restored.kmAkhir, 456);
     expect(await store.getAttachments(id), receipts);
 
-    final edited = restored.copyWith(extras: const [
-      ExtraExpense(name: 'Tol kota', amount: 150000),
-    ]);
+    final edited = restored.copyWith(
+        tripType: TripType.dalamKota,
+        extras: const [ExtraExpense(name: 'Tol kota', amount: 150000)]);
     await store.saveReportWithAttachments(edited, receipts);
     await store.close();
     expect((await store.getReport(id))!.extras.single.name, 'Tol kota');
     expect((await store.getReport(id))!.extra, 150000);
+    expect((await store.getReport(id))!.tripType, TripType.dalamKota);
     await store.saveReportWithAttachments(edited.copyWith(extras: []), receipts);
     await store.close();
     expect((await store.getReport(id))!.extras, isEmpty);
@@ -67,12 +70,13 @@ void main() {
     expect(await store.getAttachments(id), receipts);
   });
 
-  test('v6 upgrade preserves legacy totals, buses, KM and receipt links',
+  for (final version in [6, 7]) {
+  test('v$version upgrade preserves totals, buses, KM, extras and receipt links',
       () async {
     final legacy = await databaseFactory.openDatabase(
       p.join(temporary.path, 'happy_bus.db'),
       options: OpenDatabaseOptions(
-        version: 6,
+        version: version,
         onCreate: (db, _) async {
           await db.execute('''
             CREATE TABLE reports (
@@ -95,6 +99,10 @@ void main() {
               catatan TEXT NOT NULL DEFAULT ''
             )
           ''');
+          if (version == 7) {
+            await db.execute(
+                "ALTER TABLE reports ADD COLUMN extra_details TEXT NOT NULL DEFAULT '[]'");
+          }
           await db.execute('''
             CREATE TABLE buses (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -123,6 +131,8 @@ void main() {
               'km_akhir': 456,
               'extra': i == 1 ? 75000 : 0,
               'bbm': 100000,
+              if (version == 7 && i == 1)
+                'extra_details': '[{"name":"Parkir","amount":75000}]',
             });
           }
           await db.insert('report_attachments',
@@ -137,23 +147,31 @@ void main() {
     await legacy.close();
 
     final upgraded = await store.db;
-    expect(await upgraded.getVersion(), 7);
+    expect(await upgraded.getVersion(), 8);
     final rows = await upgraded.query('reports', orderBy: 'id');
     for (var i = 0; i < rows.length; i++) {
-      expect(rows[i], {...originalRows[i], 'extra_details': '[]'});
+      expect(rows[i], {
+        ...originalRows[i],
+        if (version == 6) 'extra_details': '[]',
+        'trip_type': '',
+      });
     }
     expect(await upgraded.query('report_attachments'), originalReceipts);
     expect(await upgraded.query('buses'), originalBuses);
     expect(await upgraded.query('settings'), originalSettings);
     final report = (await store.getReport(1))!;
-    expect(report.extras.single.name, 'Extra lama');
+    expect(report.tripType, TripType.unspecified);
+    expect(report.extras.single.name, version == 6 ? 'Extra lama' : 'Parkir');
     expect(report.extras.single.amount, 75000);
     expect(report.totalPengeluaran, 175000);
     expect((await store.getReport(2))!.extras, isEmpty);
     await store.saveReportWithAttachments(report, ['/saved/receipt.jpg']);
     await store.close();
-    expect((await store.getReport(1))!.extras.single.name, 'Extra lama');
+    expect((await store.getReport(1))!.tripType, TripType.unspecified);
+    expect((await store.getReport(1))!.extras.single.name,
+        version == 6 ? 'Extra lama' : 'Parkir');
     expect((await store.getReport(1))!.extra, 75000);
     expect(await store.getAttachments(1), ['/saved/receipt.jpg']);
   });
+  }
 }

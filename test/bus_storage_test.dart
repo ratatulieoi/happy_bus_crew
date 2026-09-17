@@ -216,14 +216,15 @@ void main() {
     expect((await store.getSelectedBus())!.name, 'Selected');
     expect((await store.getSelectedBus())!.plate, 'L 4004 AB');
     final db = await store.db;
-    expect(await db.getVersion(), 7);
+    expect(await db.getVersion(), 8);
     expect(await db.query('reports'), [
       {
         'id': 7,
         'no_polisi': 'B 1001 XX',
         'km_awal': 123,
         'km_akhir': 456,
-        'extra_details': '[]'
+        'extra_details': '[]',
+        'trip_type': '',
       }
     ]);
     expect(await db.query('report_attachments'), [

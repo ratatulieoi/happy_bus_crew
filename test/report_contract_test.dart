@@ -46,6 +46,47 @@ void main() {
     expect(changed.catatan, 'Diubah');
   });
 
+  test('trip types round-trip, copy and preserve unspecified legacy reports', () {
+    for (final type in TripType.values) {
+      final original = report().copyWith(tripType: type);
+      expect(original.toMap()['trip_type'], type.value);
+      final restored = Report.fromMap(original.toMap());
+      expect(restored.tripType, type);
+      expect(restored.copyWith(catatan: 'Edited').tripType, type);
+      expect(restored.totalPengeluaran, report().totalPengeluaran);
+    }
+    for (final value in [null, '', 'unknown', 123]) {
+      expect(Report.fromMap({'trip_type': value}).tripType, TripType.unspecified);
+    }
+    expect(Report.fromMap({}).tripType.label, '-');
+  });
+
+  test('PDF shows the chosen trip type without assuming one for old reports',
+      () async {
+    for (final type in TripType.values) {
+      final doc = await ReportPdfBuilder.build(report().copyWith(tripType: type));
+      final raw = latin1.decode(await doc.save());
+      final streams = <String>[];
+      for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true)
+          .allMatches(raw)) {
+        try {
+          streams.add(latin1.decode(zlib.decode(latin1.encode(match.group(1)!))));
+        } on FormatException {
+          streams.add(match.group(1)!);
+        }
+      }
+      final content = streams.join('\n');
+      expect(content, contains('Jenis'));
+      if (type == TripType.unspecified) {
+        expect(content, isNot(contains('Luar')));
+        expect(content, isNot(contains('Dalam')));
+      } else {
+        expect(content, contains(type == TripType.luarKota ? 'Luar' : 'Dalam'));
+        expect(content, contains('Kota'));
+      }
+    }
+  });
+
   test('financial calculations retain existing contract', () {
     final r = report();
     expect(r.extra, 50000);

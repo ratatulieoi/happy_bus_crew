@@ -1,5 +1,21 @@
 import 'dart:convert';
 
+// Unspecified preserves reports created before trip types were recorded.
+enum TripType {
+  unspecified('', '-'),
+  luarKota('luar_kota', 'Luar Kota'),
+  dalamKota('dalam_kota', 'Dalam Kota');
+
+  const TripType(this.value, this.label);
+  final String value;
+  final String label;
+
+  static TripType fromValue(Object? value) => values.firstWhere(
+        (type) => type.value == value,
+        orElse: () => unspecified,
+      );
+}
+
 /// Satu baris pengeluaran extra: nama item dan harga rupiah.
 ///
 /// Extra selalu berupa daftar berpasangan nama-harga agar setiap
@@ -39,6 +55,7 @@ class Report {
   String noPolisi; // "B 1234 XX"
   String pengemudi; // nama sopir
   String kernet; // nama kernet/asisten
+  TripType tripType;
 
   // --- Kilometer ---
   int kmAwal;
@@ -77,6 +94,7 @@ class Report {
     required this.tagihan,
     required this.namaCrew,
     this.catatan = '',
+    this.tripType = TripType.unspecified,
     List<ExtraExpense>? extras,
   })  : tanggalBuat = tanggalBuat ?? DateTime.now(),
         extras = List.unmodifiable(extras ?? const <ExtraExpense>[]);
@@ -104,6 +122,7 @@ class Report {
       'no_polisi': noPolisi,
       'pengemudi': pengemudi,
       'kernet': kernet,
+      'trip_type': tripType.value,
       'km_awal': kmAwal,
       'km_akhir': kmAkhir,
       'uang_saku': uangSaku,
@@ -128,6 +147,7 @@ class Report {
       noPolisi: map['no_polisi'] as String? ?? '',
       pengemudi: map['pengemudi'] as String? ?? '',
       kernet: map['kernet'] as String? ?? '',
+      tripType: TripType.fromValue(map['trip_type']),
       kmAwal: map['km_awal'] as int? ?? 0,
       kmAkhir: map['km_akhir'] as int? ?? 0,
       uangSaku: map['uang_saku'] as int? ?? 0,
@@ -177,6 +197,7 @@ class Report {
     String? noPolisi,
     String? pengemudi,
     String? kernet,
+    TripType? tripType,
     int? kmAwal,
     int? kmAkhir,
     int? uangSaku,
@@ -196,6 +217,7 @@ class Report {
       noPolisi: noPolisi ?? this.noPolisi,
       pengemudi: pengemudi ?? this.pengemudi,
       kernet: kernet ?? this.kernet,
+      tripType: tripType ?? this.tripType,
       kmAwal: kmAwal ?? this.kmAwal,
       kmAkhir: kmAkhir ?? this.kmAkhir,
       uangSaku: uangSaku ?? this.uangSaku,

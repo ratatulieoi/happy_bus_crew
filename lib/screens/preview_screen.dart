@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
@@ -11,6 +12,7 @@ import '../models/report.dart';
 import '../pdf/report_pdf.dart';
 import '../ui/app_theme.dart';
 import '../ui/components.dart';
+import '../ui/zoomable_pdf_pages.dart';
 import '../utils/format.dart';
 
 class PreviewScreen extends StatefulWidget {
@@ -65,6 +67,9 @@ class _PreviewScreenState extends State<PreviewScreen> {
       });
     }
   }
+
+  // Keep the callback stable when export buttons rebuild the screen.
+  Future<Uint8List> _previewBytes(PdfPageFormat _) async => _bytes!;
 
   String get _fileBase {
     final date = widget.report.tanggalBuat;
@@ -173,49 +178,27 @@ class _PreviewScreenState extends State<PreviewScreen> {
       appBar: AppBar(title: const Text('Pratinjau laporan')),
       body: ContentWidth(
         maxWidth: 960,
-        child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+        child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Periksa sebelum dibagikan',
-                    style: Theme.of(context).textTheme.headlineMedium),
+                Text(widget.report.ringkas,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(
+                    '${formatTanggalPendek(widget.report.tanggalBuat)} • ${widget.attachmentImages.length} bukti terlampir',
+                    style: const TextStyle(color: AppColors.muted)),
                 const SizedBox(height: 8),
                 const Text(
-                    'Pastikan data perjalanan dan bukti pengeluaran sudah sesuai.',
-                    style: TextStyle(color: AppColors.muted)),
-                const SizedBox(height: 20),
-                SectionCard(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const StatusPill(
-                          label: 'Laporan crew • PDF',
-                          icon: Icons.description_outlined,
-                          color: AppColors.brand,
-                          background: AppColors.dangerSoft),
-                      const SizedBox(height: 12),
-                      Text(widget.report.ringkas,
-                          style: Theme.of(context).textTheme.titleMedium),
-                      const SizedBox(height: 6),
-                      Text(
-                          '${formatTanggalPendek(widget.report.tanggalBuat)} • ${widget.attachmentImages.length} bukti terlampir',
-                          style: const TextStyle(color: AppColors.muted)),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                const SectionHeading(
-                    title: 'Dokumen PDF',
-                    subtitle:
-                        'Gulir halaman di dalam pratinjau untuk memeriksa seluruh laporan.'),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: SizedBox(
-                    height: (constraints.maxHeight * .78)
-                        .clamp(400.0, 900.0)
-                        .toDouble(),
+                    'Cubit atau ketuk dua kali untuk zoom. Geser untuk melihat detail, gunakan panah untuk berpindah halaman.',
+                    style: TextStyle(color: AppColors.muted, fontSize: 12)),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
                     child: _building
                         ? const SectionCard(
                             child: Center(
@@ -245,8 +228,11 @@ class _PreviewScreenState extends State<PreviewScreen> {
                                   ),
                                 ),
                               )
-                            : PdfPreview(
-                                build: (_) async => _bytes!,
+                            : PdfPreview.builder(
+                                build: _previewBytes,
+                                dpi: 144,
+                                pagesBuilder: (_, pages) =>
+                                    ZoomablePdfPages(pages: pages),
                                 canChangeOrientation: false,
                                 canChangePageFormat: false,
                                 canDebug: false,
@@ -259,7 +245,6 @@ class _PreviewScreenState extends State<PreviewScreen> {
                 ),
               ],
             ),
-          ),
         ),
       ),
       bottomNavigationBar: BottomActionBar(

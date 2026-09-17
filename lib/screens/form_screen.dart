@@ -41,6 +41,9 @@ class _FormScreenState extends State<FormScreen> {
   final List<TextEditingController> _extraNames = [];
   final List<TextEditingController> _extraAmounts = [];
   String? _extraError;
+  TripType _tripType = TripType.unspecified;
+  TripType _initialTripType = TripType.unspecified;
+  String? _tripTypeError;
   final List<File> _attachments = [];
   List<String> _initialValues = [];
   List<String> _initialAttachments = [];
@@ -74,7 +77,8 @@ class _FormScreenState extends State<FormScreen> {
   bool get _dirty =>
       !_loading &&
       _loadError == null &&
-      (!_same(_initialValues, _controllers.map((c) => c.text).toList()) ||
+      (_tripType != _initialTripType ||
+          !_same(_initialValues, _controllers.map((c) => c.text).toList()) ||
           !_same(
               _initialAttachments, _attachments.map((f) => f.path).toList()));
 
@@ -90,6 +94,7 @@ class _FormScreenState extends State<FormScreen> {
   void initState() {
     super.initState();
     final r = widget.report;
+    _tripType = r?.tripType ?? TripType.unspecified;
     String amount(int? value) =>
         value == null || value == 0 ? '' : formatNumberId(value);
     _berangkat = TextEditingController(text: r?.hariTglBerangkat ?? '');
@@ -147,6 +152,7 @@ class _FormScreenState extends State<FormScreen> {
       _attachments
         ..clear()
         ..addAll(files);
+      _initialTripType = _tripType;
       _initialValues = _controllers.map((c) => c.text).toList();
       _initialAttachments = _attachments.map((f) => f.path).toList();
       setState(() => _loading = false);
@@ -349,6 +355,8 @@ class _FormScreenState extends State<FormScreen> {
               readOnly: true,
               suffixIcon: const Icon(Icons.lock_outline, size: 18)),
           const SizedBox(height: 16),
+          _tripTypeField(),
+          const SizedBox(height: 16),
           _dateField(_berangkat, 'Tanggal berangkat'),
           const SizedBox(height: 16),
           _text(_jam, 'Jam berangkat',
@@ -388,6 +396,40 @@ class _FormScreenState extends State<FormScreen> {
               second: _numberField(_kmAkhir, 'KM akhir', money: false)),
         ])),
       ];
+
+  Widget _tripTypeField() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('Jenis perjalanan',
+              style: TextStyle(fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Wrap(spacing: 8, runSpacing: 8, children: [
+            for (final type in [TripType.luarKota, TripType.dalamKota])
+              ChoiceChip(
+                label: Text(type.label),
+                selected: _tripType == type,
+                onSelected: _busy
+                    ? null
+                    : (_) => setState(() {
+                          _tripType = type;
+                          _tripTypeError = null;
+                        }),
+              ),
+          ]),
+          if (_tripTypeError != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: Text(_tripTypeError!,
+                  style: const TextStyle(color: AppColors.danger)),
+            )
+          else if (_isEdit && _tripType == TripType.unspecified)
+            const Padding(
+              padding: EdgeInsets.only(top: 8),
+              child: Text('Laporan lama belum memiliki jenis perjalanan.',
+                  style: TextStyle(color: AppColors.muted, fontSize: 12)),
+            ),
+        ],
+      );
 
   List<Widget> _financeFields() => [
         SectionCard(
@@ -795,7 +837,16 @@ class _FormScreenState extends State<FormScreen> {
     });
   }
 
+  bool _validateTripType() {
+    if (_isEdit || _tripType != TripType.unspecified) return true;
+    setState(() => _tripTypeError = 'Pilih Luar Kota atau Dalam Kota.');
+    _goToStep(0);
+    showAppMessage(context, _tripTypeError!);
+    return false;
+  }
+
   void _nextStep() {
+    if (_step == 0 && !_validateTripType()) return;
     if (_step == 1 && !_validateExtras()) {
       showAppMessage(context, _extraError!);
       return;
@@ -838,6 +889,7 @@ class _FormScreenState extends State<FormScreen> {
         noPolisi: _polisi.text.trim(),
         pengemudi: _pengemudi.text.trim(),
         kernet: _kernet.text.trim(),
+        tripType: _tripType,
         kmAwal: parseRupiahInput(_kmAwal.text),
         kmAkhir: parseRupiahInput(_kmAkhir.text),
         uangSaku: parseRupiahInput(_uangSaku.text),
@@ -857,6 +909,7 @@ class _FormScreenState extends State<FormScreen> {
   Future<void> _onSave() async {
     if (_busy || _loading) return;
     FocusScope.of(context).unfocus();
+    if (!_validateTripType()) return;
     if (!_validateExtras()) {
       _goToStep(1);
       showAppMessage(context, _extraError!);
@@ -882,6 +935,7 @@ class _FormScreenState extends State<FormScreen> {
   Future<void> _onPreview() async {
     if (_busy || _loading) return;
     FocusScope.of(context).unfocus();
+    if (!_validateTripType()) return;
     if (!_validateExtras()) {
       _goToStep(1);
       showAppMessage(context, _extraError!);

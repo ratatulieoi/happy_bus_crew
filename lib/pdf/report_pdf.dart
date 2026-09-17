@@ -139,6 +139,9 @@ class ReportPdfBuilder {
       child: pw.Column(
         children: [
           _infoRow([
+            _field('Jenis perjalanan', r.tripType.label),
+          ]),
+          _infoRow([
             _field('Hari/Tgl Berangkat', r.hariTglBerangkat),
             _field('Jam', r.jamBerangkat),
           ]),

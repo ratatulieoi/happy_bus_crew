@@ -59,7 +59,7 @@ void main() {
           return {'id': 1};
         case 'query':
           return [
-            {'user_version': 7}
+            {'user_version': 8}
           ];
         case 'execute':
           return null;

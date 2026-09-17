@@ -16,7 +16,7 @@ Branch ini berasal dari `main` dan mempertahankan tampilan Flutter terbaru untuk
 - Pelacakan oli, pengingat ganti oli, dan pencatatan ganti oli tidak tersedia.
 - Laporan lama, lampiran struk, dan ekspor PDF tetap tersedia. Mengubah identitas bus tidak mengubah nomor polisi pada laporan lama.
 
-Database versi 7 menambahkan rincian Extra tanpa mengubah laporan lama, nilai KM manual, atau lampiran. Nominal Extra lama tampil sebagai satu item **Extra lama** yang dapat diganti namanya. Migrasi dari versi sebelum 6 tetap memindahkan identitas bus dari pengaturan lama dan mengabaikan pengaturan oli.
+Database versi 8 menambahkan jenis perjalanan tanpa menetapkan kategori pada laporan lama. Laporan lama menampilkan tanda `-` pada PDF sampai jenis perjalanan dipilih. Migrasi versi 7 menambahkan rincian Extra tanpa mengubah laporan lama, nilai KM manual, atau lampiran. Nominal Extra lama tampil sebagai satu item **Extra lama** yang dapat diganti namanya. Migrasi dari versi sebelum 6 tetap memindahkan identitas bus dari pengaturan lama dan mengabaikan pengaturan oli.
 
 ---
 
@@ -24,13 +24,14 @@ Database versi 7 menambahkan rincian Extra tanpa mengubah laporan lama, nilai KM
 
 - **Form lengkap** sesuai contoh laporan asli:
   - Hari/Tgl Berangkat, Jam, Hari/Tgl Kembali, No. Polisi, Pengemudi, Kernet
+  - Pilihan **Luar Kota** atau **Dalam Kota** wajib untuk laporan baru, tersimpan per laporan, dan tercantum pada PDF
   - KM Awal & KM Akhir sebagai isian manual
   - Uang saku dan rincian pengeluaran berurutan: BBM, uang makan, tagihan, lalu Extra
   - Extra dapat berisi banyak item. Tombol **Tambah Extra** menambah baris nama dan harga dalam rupiah. Setiap baris wajib memiliki nama dan harga lebih dari nol, atau dihapus jika tidak digunakan.
   - Nama dan harga setiap Extra tersimpan di laporan dan tampil di PDF. Total Extra dihitung dari seluruh item.
   - Total & selisih (surplus/defisit) dihitung otomatis
   - Nama crew untuk tanda tangan
-- **Pratinjau PDF** langsung di layar
+- **Pratinjau PDF** dengan pinch-to-zoom, ketuk dua kali, tombol perbesar dan perkecil, serta reset zoom. Panah halaman membuka setiap halaman laporan dan lampiran.
 - **Simpan** PDF ke perangkat (folder `HappyBus/`)
 - **Bagikan** PDF (WhatsApp, email, dll.)
 - **Cetak** langsung via printer
