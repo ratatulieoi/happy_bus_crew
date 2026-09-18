@@ -139,8 +139,14 @@ class ReportPdfBuilder {
       child: pw.Column(
         children: [
           _infoRow([
-            _field('Jenis perjalanan', r.tripType.label),
+            _field('Luar Kota (LK)', r.luarKotaCount?.toString() ?? '-'),
+            _field('Dalam Kota (DK)', r.dalamKotaCount?.toString() ?? '-'),
           ]),
+          if (!r.hasTripCounts && r.tripType != TripType.unspecified)
+            _infoRow([
+              _field('Jenis perjalanan lama',
+                  '${r.tripType.label}, jumlah belum dicatat'),
+            ]),
           _infoRow([
             _field('Hari/Tgl Berangkat', r.hariTglBerangkat),
             _field('Jam', r.jamBerangkat),

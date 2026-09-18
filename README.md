@@ -16,7 +16,7 @@ Branch ini berasal dari `main` dan mempertahankan tampilan Flutter terbaru untuk
 - Pelacakan oli, pengingat ganti oli, dan pencatatan ganti oli tidak tersedia.
 - Laporan lama, lampiran struk, dan ekspor PDF tetap tersedia. Mengubah identitas bus tidak mengubah nomor polisi pada laporan lama.
 
-Database versi 8 menambahkan jenis perjalanan tanpa menetapkan kategori pada laporan lama. Laporan lama menampilkan tanda `-` pada PDF sampai jenis perjalanan dipilih. Migrasi versi 7 menambahkan rincian Extra tanpa mengubah laporan lama, nilai KM manual, atau lampiran. Nominal Extra lama tampil sebagai satu item **Extra lama** yang dapat diganti namanya. Migrasi dari versi sebelum 6 tetap memindahkan identitas bus dari pengaturan lama dan mengabaikan pengaturan oli.
+Database versi 9 menambahkan jumlah LK dan DK secara terpisah. Jumlah yang belum pernah dicatat pada laporan lama tetap kosong, bukan dianggap 0 atau 1. PDF menampilkan tanda `-` untuk jumlah yang belum dicatat dan tetap menampilkan kategori lama dari versi 8, jika ada. Migrasi versi 7 menambahkan rincian Extra tanpa mengubah laporan lama, nilai KM manual, atau lampiran. Nominal Extra lama tampil sebagai satu item **Extra lama** yang dapat diganti namanya. Migrasi dari versi sebelum 6 tetap memindahkan identitas bus dari pengaturan lama dan mengabaikan pengaturan oli.
 
 ---
 
@@ -24,7 +24,7 @@ Database versi 8 menambahkan jenis perjalanan tanpa menetapkan kategori pada lap
 
 - **Form lengkap** sesuai contoh laporan asli:
   - Hari/Tgl Berangkat, Jam, Hari/Tgl Kembali, No. Polisi, Pengemudi, Kernet
-  - Pilihan **Luar Kota** atau **Dalam Kota** wajib untuk laporan baru, tersimpan per laporan, dan tercantum pada PDF
+  - Jumlah **Luar Kota (LK)** dan **Dalam Kota (DK)** diisi terpisah, misalnya LK 3 dan DK 5 dalam satu laporan. Keduanya wajib diisi dengan bilangan bulat 0 atau lebih pada laporan baru. Nilai 0 berarti tidak ada perjalanan. Kedua jumlah tersimpan dan tampil di PDF.
   - KM Awal & KM Akhir sebagai isian manual
   - Uang saku dan rincian pengeluaran berurutan: BBM, uang makan, tagihan, lalu Extra
   - Extra dapat berisi banyak item. Tombol **Tambah Extra** menambah baris nama dan harga dalam rupiah. Setiap baris wajib memiliki nama dan harga lebih dari nol, atau dihapus jika tidak digunakan.

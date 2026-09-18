@@ -216,7 +216,7 @@ void main() {
     expect((await store.getSelectedBus())!.name, 'Selected');
     expect((await store.getSelectedBus())!.plate, 'L 4004 AB');
     final db = await store.db;
-    expect(await db.getVersion(), 8);
+    expect(await db.getVersion(), 9);
     expect(await db.query('reports'), [
       {
         'id': 7,
@@ -225,6 +225,8 @@ void main() {
         'km_akhir': 456,
         'extra_details': '[]',
         'trip_type': '',
+        'luar_kota_count': null,
+        'dalam_kota_count': null,
       }
     ]);
     expect(await db.query('report_attachments'), [

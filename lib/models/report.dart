@@ -55,7 +55,12 @@ class Report {
   String noPolisi; // "B 1234 XX"
   String pengemudi; // nama sopir
   String kernet; // nama kernet/asisten
+  // Retained for reports saved before separate trip counts were available.
   TripType tripType;
+  final int? luarKotaCount;
+  final int? dalamKotaCount;
+
+  bool get hasTripCounts => luarKotaCount != null && dalamKotaCount != null;
 
   // --- Kilometer ---
   int kmAwal;
@@ -95,8 +100,12 @@ class Report {
     required this.namaCrew,
     this.catatan = '',
     this.tripType = TripType.unspecified,
+    this.luarKotaCount,
+    this.dalamKotaCount,
     List<ExtraExpense>? extras,
-  })  : tanggalBuat = tanggalBuat ?? DateTime.now(),
+  })  : assert(luarKotaCount == null || luarKotaCount >= 0),
+        assert(dalamKotaCount == null || dalamKotaCount >= 0),
+        tanggalBuat = tanggalBuat ?? DateTime.now(),
         extras = List.unmodifiable(extras ?? const <ExtraExpense>[]);
 
   /// Jumlah seluruh harga extra. Setiap harga dihitung tepat satu kali.
@@ -123,6 +132,8 @@ class Report {
       'pengemudi': pengemudi,
       'kernet': kernet,
       'trip_type': tripType.value,
+      'luar_kota_count': luarKotaCount,
+      'dalam_kota_count': dalamKotaCount,
       'km_awal': kmAwal,
       'km_akhir': kmAkhir,
       'uang_saku': uangSaku,
@@ -148,6 +159,8 @@ class Report {
       pengemudi: map['pengemudi'] as String? ?? '',
       kernet: map['kernet'] as String? ?? '',
       tripType: TripType.fromValue(map['trip_type']),
+      luarKotaCount: map['luar_kota_count'] as int?,
+      dalamKotaCount: map['dalam_kota_count'] as int?,
       kmAwal: map['km_awal'] as int? ?? 0,
       kmAkhir: map['km_akhir'] as int? ?? 0,
       uangSaku: map['uang_saku'] as int? ?? 0,
@@ -198,6 +211,8 @@ class Report {
     String? pengemudi,
     String? kernet,
     TripType? tripType,
+    int? luarKotaCount,
+    int? dalamKotaCount,
     int? kmAwal,
     int? kmAkhir,
     int? uangSaku,
@@ -218,6 +233,8 @@ class Report {
       pengemudi: pengemudi ?? this.pengemudi,
       kernet: kernet ?? this.kernet,
       tripType: tripType ?? this.tripType,
+      luarKotaCount: luarKotaCount ?? this.luarKotaCount,
+      dalamKotaCount: dalamKotaCount ?? this.dalamKotaCount,
       kmAwal: kmAwal ?? this.kmAwal,
       kmAkhir: kmAkhir ?? this.kmAkhir,
       uangSaku: uangSaku ?? this.uangSaku,

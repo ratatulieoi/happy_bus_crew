@@ -61,7 +61,57 @@ void main() {
     expect(Report.fromMap({}).tripType.label, '-');
   });
 
-  test('PDF shows the chosen trip type without assuming one for old reports',
+  test('trip counts round-trip independently and preserve zero', () {
+    for (final counts in [[3, 5], [3, 0], [0, 5], [0, 0]]) {
+      final original = report().copyWith(
+          luarKotaCount: counts[0], dalamKotaCount: counts[1]);
+      final restored = Report.fromMap(original.toMap());
+      expect(restored.luarKotaCount, counts[0]);
+      expect(restored.dalamKotaCount, counts[1]);
+      expect(restored.hasTripCounts, isTrue);
+      expect(restored.copyWith(catatan: 'Edited').toMap(),
+          {...original.toMap(), 'catatan': 'Edited'});
+      expect(restored.copyWith(luarKotaCount: 0).luarKotaCount, 0);
+      expect(restored.copyWith(dalamKotaCount: 0).dalamKotaCount, 0);
+      expect(restored.totalPengeluaran, report().totalPengeluaran);
+    }
+    for (final type in TripType.values) {
+      final legacy = Report.fromMap({'trip_type': type.value});
+      expect(legacy.luarKotaCount, isNull);
+      expect(legacy.dalamKotaCount, isNull);
+      expect(legacy.hasTripCounts, isFalse);
+      expect(Report.fromMap(legacy.toMap()).tripType, type);
+    }
+  });
+
+  test('PDF shows both trip counts, including zero, instead of old category',
+      () async {
+    for (final counts in [[3, 5], [0, 5], [3, 0], [0, 0]]) {
+      final doc = await ReportPdfBuilder.build(report().copyWith(
+          tripType: TripType.luarKota,
+          luarKotaCount: counts[0], dalamKotaCount: counts[1]));
+      final raw = latin1.decode(await doc.save());
+      final streams = <String>[];
+      for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true)
+          .allMatches(raw)) {
+        try {
+          streams.add(latin1.decode(zlib.decode(latin1.encode(match.group(1)!))));
+        } on FormatException {
+          streams.add(match.group(1)!);
+        }
+      }
+      final content = streams.join('\n');
+      // Count values have their own PDF text operands after each label.
+      final header = content.substring(content.indexOf('Luar'), content.indexOf('Berangkat'));
+      final lk = header.substring(0, header.indexOf('Dalam'));
+      final dk = header.substring(header.indexOf('Dalam'));
+      expect(lk, contains('(${counts[0]})'));
+      expect(dk, contains('(${counts[1]})'));
+      expect(header, isNot(contains('Jenis')));
+    }
+  });
+
+  test('PDF retains old trip category without inventing counts',
       () async {
     for (final type in TripType.values) {
       final doc = await ReportPdfBuilder.build(report().copyWith(tripType: type));
@@ -76,13 +126,17 @@ void main() {
         }
       }
       final content = streams.join('\n');
-      expect(content, contains('Jenis'));
+      final header = content.substring(content.indexOf('Luar'), content.indexOf('Berangkat'));
+      final lk = header.substring(0, header.indexOf('Dalam'));
+      final dk = header.substring(header.indexOf('Dalam'));
+      expect(lk, contains('(-)'));
+      expect(dk, contains('(-)'));
       if (type == TripType.unspecified) {
-        expect(content, isNot(contains('Luar')));
-        expect(content, isNot(contains('Dalam')));
+        expect(header, isNot(contains('Jenis')));
       } else {
-        expect(content, contains(type == TripType.luarKota ? 'Luar' : 'Dalam'));
-        expect(content, contains('Kota'));
+        final legacy = header.substring(header.indexOf('Jenis'));
+        expect(legacy, contains(type == TripType.luarKota ? 'Luar' : 'Dalam'));
+        expect(legacy, contains('belum'));
       }
     }
   });

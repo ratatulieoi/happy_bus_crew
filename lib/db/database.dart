@@ -17,7 +17,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       p.join(dbPath, 'happy_bus.db'),
-      version: 8,
+      version: 9,
       onCreate: (db, v) async {
         await _createBusTable(db);
         await db.execute('''
@@ -31,6 +31,8 @@ class DatabaseHelper {
             pengemudi          TEXT    NOT NULL DEFAULT '',
             kernet             TEXT    NOT NULL DEFAULT '',
             trip_type          TEXT    NOT NULL DEFAULT '',
+            luar_kota_count    INTEGER CHECK (luar_kota_count >= 0),
+            dalam_kota_count   INTEGER CHECK (dalam_kota_count >= 0),
             km_awal            INTEGER NOT NULL DEFAULT 0,
             km_akhir           INTEGER NOT NULL DEFAULT 0,
             uang_saku          INTEGER NOT NULL DEFAULT 0,
@@ -116,6 +118,13 @@ class DatabaseHelper {
         if (oldVersion < 8) {
           await db.execute(
               "ALTER TABLE reports ADD COLUMN trip_type TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 9) {
+          // NULL means unrecorded, not zero trips. Keep the old category intact.
+          await db.execute(
+              'ALTER TABLE reports ADD COLUMN luar_kota_count INTEGER CHECK (luar_kota_count >= 0)');
+          await db.execute(
+              'ALTER TABLE reports ADD COLUMN dalam_kota_count INTEGER CHECK (dalam_kota_count >= 0)');
         }
       },
     );

@@ -119,7 +119,7 @@ void main() {
           final values = args['arguments'] as List? ?? [];
           if (sql.contains('PRAGMA user_version')) {
             return [
-              {'user_version': 8}
+              {'user_version': 9}
             ];
           }
           if (sql.contains('FROM settings')) {
@@ -255,6 +255,16 @@ void main() {
   Future<void> reveal(WidgetTester tester, Finder target) async {
     await tester.scrollUntilVisible(target, 250,
         scrollable: find.byType(Scrollable).first);
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> fillTripCounts(WidgetTester tester, String lk, String dk) async {
+    final lkField = find.widgetWithText(TextFormField, 'Luar Kota (LK)');
+    final dkField = find.widgetWithText(TextFormField, 'Dalam Kota (DK)');
+    await reveal(tester, lkField);
+    await tester.enterText(lkField, lk);
+    await reveal(tester, dkField);
+    await tester.enterText(dkField, dk);
     await tester.pumpAndSettle();
   }
 
@@ -484,8 +494,7 @@ void main() {
     await pumpScreen(tester, const HomeScreen());
     await tester.tap(find.text('Buat laporan baru'));
     await tester.pumpAndSettle();
-    await reveal(tester, find.text('Dalam Kota'));
-    await tester.tap(find.text('Dalam Kota'));
+    await fillTripCounts(tester, '3', '5');
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     for (var i = 1; i <= 2; i++) {
@@ -504,10 +513,13 @@ void main() {
     expect(restored.extras.map((item) => item.name), ['Parkir', 'Tol']);
     expect(restored.extras.map((item) => item.amount), [20000, 150000]);
     expect(restored.totalPengeluaran, 170000);
-    expect(restored.tripType, TripType.dalamKota);
+    expect(restored.luarKotaCount, 3);
+    expect(restored.dalamKotaCount, 5);
     await pumpScreen(tester, FormScreen(report: restored));
-    expect(tester.widget<ChoiceChip>(
-        find.widgetWithText(ChoiceChip, 'Dalam Kota')).selected, isTrue);
+    expect(tester.widget<TextFormField>(
+        find.widgetWithText(TextFormField, 'Luar Kota (LK)')).controller!.text, '3');
+    expect(tester.widget<TextFormField>(
+        find.widgetWithText(TextFormField, 'Dalam Kota (DK)')).controller!.text, '5');
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     await reveal(tester, find.text('Tambah Extra'));
@@ -535,8 +547,7 @@ void main() {
             .controller!
             .text,
         'B 1001 XX');
-    await reveal(tester, find.text('Luar Kota'));
-    await tester.tap(find.text('Luar Kota'));
+    await fillTripCounts(tester, '3', '0');
     await tester.drag(find.byType(ListView).first, const Offset(0, -900));
     await tester.pumpAndSettle();
     expect(
@@ -566,7 +577,8 @@ void main() {
     expect(savedReport?['km_awal'], 120);
     expect(savedReport?['km_akhir'], 480);
     expect(savedReport?['nama_crew'], 'Agus');
-    expect(savedReport?['trip_type'], 'luar_kota');
+    expect(savedReport?['luar_kota_count'], 3);
+    expect(savedReport?['dalam_kota_count'], 0);
     await tester.tap(find.text('Buat laporan baru'));
     await tester.pumpAndSettle();
     await tester.drag(find.byType(ListView).first, const Offset(0, -900));
@@ -576,13 +588,14 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('new reports require trip type on next, preview and save',
+  testWidgets('new reports require both counts on next, preview and save',
       (tester) async {
     await pumpScreen(tester, const FormScreen());
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     expect(find.text('Detail perjalanan'), findsOneWidget);
-    expect(find.text('Pilih Luar Kota atau Dalam Kota.'), findsWidgets);
+    expect(find.text('Isi jumlah LK dan DK dengan angka bulat 0 atau lebih.'),
+        findsWidgets);
     await tester.tap(find.byTooltip('Pratinjau PDF tanpa menyimpan'));
     await tester.pumpAndSettle();
     expect(find.byType(PreviewScreen), findsNothing);
@@ -592,15 +605,38 @@ void main() {
     await tester.pumpAndSettle();
     expect(savedReport, isNull);
     expect(find.text('Detail perjalanan'), findsOneWidget);
-    await reveal(tester, find.text('Dalam Kota'));
-    await tester.tap(find.text('Dalam Kota'));
+    await fillTripCounts(tester, '3', '');
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detail perjalanan'), findsOneWidget);
     await tester.tap(find.byTooltip('Kembali'));
     await tester.pumpAndSettle();
     expect(find.text('Keluar tanpa menyimpan?'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('trip type edit is retained and legacy reports can stay unspecified',
+  testWidgets('trip counts reject negatives, fractions and letters, but allow zero',
+      (tester) async {
+    await pumpScreen(tester, const FormScreen());
+    final field = find.widgetWithText(TextFormField, 'Luar Kota (LK)');
+    await fillTripCounts(tester, '3', '5');
+    await reveal(tester, field);
+    for (final invalid in ['-2', '1.5', '1,5', 'abc']) {
+      await tester.enterText(field, invalid);
+      expect(tester.widget<TextFormField>(field).controller!.text, '3');
+    }
+    await tester.enterText(field, '999999999999999999999999999999999');
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    expect(find.text('Detail perjalanan'), findsOneWidget);
+    await fillTripCounts(tester, '0', '0');
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    expect(find.text('Keuangan perjalanan'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('counts can replace legacy categories without inventing old counts',
       (tester) async {
     await pumpScreen(tester, const HomeScreen());
     await reveal(tester, find.byTooltip('Tindakan laporan').first);
@@ -608,15 +644,17 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ubah laporan'));
     await tester.pumpAndSettle();
-    expect(tester.widget<ChoiceChip>(
-        find.widgetWithText(ChoiceChip, 'Luar Kota')).selected, isFalse);
-    expect(tester.widget<ChoiceChip>(
-        find.widgetWithText(ChoiceChip, 'Dalam Kota')).selected, isFalse);
+    expect(tester.widget<TextFormField>(
+        find.widgetWithText(TextFormField, 'Luar Kota (LK)')).controller!.text, '');
+    expect(tester.widget<TextFormField>(
+        find.widgetWithText(TextFormField, 'Dalam Kota (DK)')).controller!.text, '');
     await tester.tap(find.text('3. Lampiran'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Simpan laporan'));
     await tester.pumpAndSettle();
     expect(savedReport?['trip_type'], '');
+    expect(savedReport?['luar_kota_count'], isNull);
+    expect(savedReport?['dalam_kota_count'], isNull);
     expect(find.byType(HomeScreen), findsOneWidget);
 
     reports[0] = fixture().copyWith(tripType: TripType.luarKota);
@@ -627,17 +665,16 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ubah laporan'));
     await tester.pumpAndSettle();
-    expect(tester.widget<ChoiceChip>(
-        find.widgetWithText(ChoiceChip, 'Luar Kota')).selected, isTrue);
-    await reveal(tester, find.text('Dalam Kota'));
-    await tester.tap(find.text('Dalam Kota'));
+    await fillTripCounts(tester, '0', '8');
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Simpan laporan'));
     await tester.pumpAndSettle();
-    expect(savedReport?['trip_type'], 'dalam_kota');
+    expect(savedReport?['trip_type'], 'luar_kota');
+    expect(savedReport?['luar_kota_count'], 0);
+    expect(savedReport?['dalam_kota_count'], 8);
     expect(tester.takeException(), isNull);
   });
 

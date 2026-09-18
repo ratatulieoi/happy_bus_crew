@@ -36,7 +36,8 @@ void main() {
       'bbm': 600000,
       'uang_makan': 100000,
       'tagihan': 50000,
-      'trip_type': 'luar_kota',
+      'luar_kota_count': 3,
+      'dalam_kota_count': 5,
     }).copyWith(extras: const [
       ExtraExpense(name: 'Parkir', amount: 20000),
       ExtraExpense(name: 'Tol', amount: 30000),
@@ -47,7 +48,8 @@ void main() {
     final restored = (await store.getReport(id))!;
     expect(restored.extras.map((item) => item.name), ['Parkir', 'Tol']);
     expect(restored.extras.map((item) => item.amount), [20000, 30000]);
-    expect(restored.tripType, TripType.luarKota);
+    expect(restored.luarKotaCount, 3);
+    expect(restored.dalamKotaCount, 5);
     expect(restored.extra, 50000);
     expect(restored.totalPengeluaran, 800000);
     expect(restored.kmAwal, 123);
@@ -55,13 +57,15 @@ void main() {
     expect(await store.getAttachments(id), receipts);
 
     final edited = restored.copyWith(
-        tripType: TripType.dalamKota,
+        luarKotaCount: 0,
+        dalamKotaCount: 8,
         extras: const [ExtraExpense(name: 'Tol kota', amount: 150000)]);
     await store.saveReportWithAttachments(edited, receipts);
     await store.close();
     expect((await store.getReport(id))!.extras.single.name, 'Tol kota');
     expect((await store.getReport(id))!.extra, 150000);
-    expect((await store.getReport(id))!.tripType, TripType.dalamKota);
+    expect((await store.getReport(id))!.luarKotaCount, 0);
+    expect((await store.getReport(id))!.dalamKotaCount, 8);
     await store.saveReportWithAttachments(edited.copyWith(extras: []), receipts);
     await store.close();
     expect((await store.getReport(id))!.extras, isEmpty);
@@ -70,7 +74,7 @@ void main() {
     expect(await store.getAttachments(id), receipts);
   });
 
-  for (final version in [6, 7]) {
+  for (final version in [6, 7, 8]) {
   test('v$version upgrade preserves totals, buses, KM, extras and receipt links',
       () async {
     final legacy = await databaseFactory.openDatabase(
@@ -99,9 +103,13 @@ void main() {
               catatan TEXT NOT NULL DEFAULT ''
             )
           ''');
-          if (version == 7) {
+          if (version >= 7) {
             await db.execute(
                 "ALTER TABLE reports ADD COLUMN extra_details TEXT NOT NULL DEFAULT '[]'");
+          }
+          if (version == 8) {
+            await db.execute(
+                "ALTER TABLE reports ADD COLUMN trip_type TEXT NOT NULL DEFAULT ''");
           }
           await db.execute('''
             CREATE TABLE buses (
@@ -122,7 +130,7 @@ void main() {
           await db.insert('buses',
               {'id': 1, 'name': 'Happy Bus', 'plate': 'B 1001 XX'});
           await db.insert('settings', {'key': 'selected_bus_id', 'value': '1'});
-          for (var i = 1; i <= 2; i++) {
+          for (var i = 1; i <= 3; i++) {
             await db.insert('reports', {
               'id': i,
               'tanggal_buat': '2026-09-15T08:00:00',
@@ -131,8 +139,10 @@ void main() {
               'km_akhir': 456,
               'extra': i == 1 ? 75000 : 0,
               'bbm': 100000,
-              if (version == 7 && i == 1)
+              if (version >= 7 && i == 1)
                 'extra_details': '[{"name":"Parkir","amount":75000}]',
+              if (version == 8)
+                'trip_type': ['', 'luar_kota', 'dalam_kota'][i - 1],
             });
           }
           await db.insert('report_attachments',
@@ -147,18 +157,34 @@ void main() {
     await legacy.close();
 
     final upgraded = await store.db;
-    expect(await upgraded.getVersion(), 8);
+    expect(await upgraded.getVersion(), 9);
     final rows = await upgraded.query('reports', orderBy: 'id');
     for (var i = 0; i < rows.length; i++) {
       expect(rows[i], {
         ...originalRows[i],
         if (version == 6) 'extra_details': '[]',
-        'trip_type': '',
+        if (version < 8) 'trip_type': '',
+        'luar_kota_count': null,
+        'dalam_kota_count': null,
       });
     }
     expect(await upgraded.query('report_attachments'), originalReceipts);
     expect(await upgraded.query('buses'), originalBuses);
     expect(await upgraded.query('settings'), originalSettings);
+    for (final row in originalRows) {
+      final id = row['id'] as int;
+      final restored = (await store.getReport(id))!;
+      expect(restored.luarKotaCount, isNull);
+      expect(restored.dalamKotaCount, isNull);
+      expect(restored.tripType, TripType.fromValue(row['trip_type']));
+      final paths = await store.getAttachments(id);
+      await store.saveReportWithAttachments(restored.copyWith(catatan: 'Edit'), paths);
+      await store.close();
+      final reopened = (await store.getReport(id))!;
+      expect(reopened.hasTripCounts, isFalse);
+      expect(reopened.tripType, restored.tripType);
+      expect(await store.getAttachments(id), paths);
+    }
     final report = (await store.getReport(1))!;
     expect(report.tripType, TripType.unspecified);
     expect(report.extras.single.name, version == 6 ? 'Extra lama' : 'Parkir');
