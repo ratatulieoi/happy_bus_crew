@@ -178,7 +178,14 @@ void main() {
                 .split(',')
                 .map((column) => column.trim())
                 .toList();
-            savedReport = Map.fromIterables(columns, values.cast<Object?>());
+            final placeholders = sql
+                .substring(sql.indexOf('VALUES (') + 8, sql.lastIndexOf(')'))
+                .split(',');
+            var index = 0;
+            savedReport = {
+              for (var i = 0; i < columns.length; i++)
+                columns[i]: placeholders[i].trim() == 'NULL' ? null : values[index++],
+            };
           }
           return 3;
         // Sqflite sends both UPDATE and DELETE through this method.
@@ -190,13 +197,17 @@ void main() {
             bus['name'] = values[0];
             bus['plate'] = values[1];
           } else if (sql.startsWith('UPDATE reports')) {
-            final columns = sql
+            final assignments = sql
                 .substring(sql.indexOf(' SET ') + 5, sql.indexOf(' WHERE '))
-                .split(',')
-                .map((column) => column.split('=').first.trim())
-                .toList();
-            savedReport = Map.fromIterables(
-                columns, values.take(columns.length).cast<Object?>());
+                .split(',');
+            var index = 0;
+            savedReport = {
+              for (final assignment in assignments)
+                assignment.split('=').first.trim():
+                    assignment.split('=').last.trim() == 'NULL'
+                        ? null
+                        : values[index++],
+            };
           } else if (sql.startsWith('DELETE FROM buses')) {
             if (failBusDelete) throw PlatformException(code: 'disk_error');
             buses.removeWhere((bus) => bus['id'] == values.first);
