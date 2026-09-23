@@ -99,7 +99,7 @@ void main() {
               bbm INTEGER NOT NULL DEFAULT 0,
               uang_makan INTEGER NOT NULL DEFAULT 0,
               extra INTEGER NOT NULL DEFAULT 0,
-              tagihan INTEGER NOT NULL DEFAULT 0,
+              ${version < 10 ? 'tagihan INTEGER NOT NULL DEFAULT 0,' : ''}
               ${version >= 10 ? 'pembayaran_tagihan INTEGER NOT NULL DEFAULT 0,' : ''}
               nama_crew TEXT NOT NULL DEFAULT '',
               catatan TEXT NOT NULL DEFAULT ''
@@ -147,7 +147,7 @@ void main() {
               'km_akhir': 456,
               'extra': i == 1 ? 75000 : 0,
               'bbm': 100000,
-              'tagihan': 20000 * i,
+              if (version < 10) 'tagihan': 20000 * i,
               if (version >= 10) 'pembayaran_tagihan': 20000 * i,
               if (version >= 7 && i == 1)
                 'extra_details': '[{"name":"Parkir","amount":75000}]',
@@ -177,7 +177,7 @@ void main() {
         if (version < 9) 'luar_kota_count': null,
         if (version < 9) 'dalam_kota_count': null,
         if (version < 10) 'pembayaran_tagihan': 0,
-        'tagihan': version >= 10 ? 20000 * (i + 1) : 0,
+        if (version < 10) 'tagihan': 0,
       });
     }
     expect(await upgraded.query('report_attachments'), originalReceipts);

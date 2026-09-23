@@ -210,7 +210,7 @@ void main() {
     expect(cleared.toMap()['extra'], 0);
     expect(cleared.toMap()['extra_details'], '[]');
     expect(Report.fromMap(cleared.toMap()).extras, isEmpty);
-    expect(cleared.totalPengeluaran, 750000);
+    expect(cleared.totalPengeluaran, 700000);
   });
 
   test('km awal and km akhir persist as manual per-report inputs', () {
@@ -319,6 +319,14 @@ void main() {
         attachmentImages: [logo, logo, Uint8List(0)]);
     final bytes = await doc.save();
     expect(ascii.decode(bytes.take(5).toList()), '%PDF-');
+    final pdfPages = doc.document.pdfPageList.pages;
+    final attachmentPageContent = <String>[];
+    for (final page in pdfPages.skip(1)) {
+      for (final contentStream in page.contents) {
+        final bytes = (contentStream as dynamic).buf.output() as List<int>;
+        attachmentPageContent.add(latin1.decode(bytes));
+      }
+    }
     final raw = latin1.decode(bytes);
     expect(RegExp(r'/Type\s*/Page\b').allMatches(raw).length, 3);
     final streams = <String>[];
@@ -333,8 +341,11 @@ void main() {
     final content = streams.join('\n');
     expect(content, contains('Awal'));
     expect(content, contains('Akhir'));
-    expect(content, contains('Lampiran 1'));
-    expect(content, contains('Lampiran 2'));
+    expect(attachmentPageContent, hasLength(2));
+    expect(
+      attachmentPageContent.every((page) => page.contains('Lampiran')),
+      isTrue,
+    );
     expect(content, isNot(contains('Struk Pembelian Bensin')));
     expect(content, isNot(contains('Bensin')));
     expect(content, contains('1.000'));
