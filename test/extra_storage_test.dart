@@ -201,7 +201,7 @@ void main() {
     expect(report.tripType, TripType.unspecified);
     expect(report.extras.single.name, version == 6 ? 'Extra lama' : 'Parkir');
     expect(report.extras.single.amount, 75000);
-    expect(report.totalPengeluaran, 100000);
+    expect(report.totalPengeluaran, version == 6 ? 175000 : 100000);
     expect((await store.getReport(2))!.extras, isEmpty);
     await store.saveReportWithAttachments(report, ['/saved/receipt.jpg']);
     await store.close();
