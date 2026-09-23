@@ -176,8 +176,8 @@ void main() {
         if (version < 8) 'trip_type': '',
         if (version < 9) 'luar_kota_count': null,
         if (version < 9) 'dalam_kota_count': null,
-        'pembayaran_tagihan': 0,
-        'tagihan': 0,
+        if (version < 10) 'pembayaran_tagihan': 0,
+        'tagihan': version >= 10 ? 20000 * (i + 1) : 0,
       });
     }
     expect(await upgraded.query('report_attachments'), originalReceipts);
