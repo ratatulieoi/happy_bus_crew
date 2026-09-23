@@ -227,6 +227,7 @@ void main() {
         'trip_type': '',
         'luar_kota_count': null,
         'dalam_kota_count': null,
+        'pembayaran_tagihan': 0,
       }
     ]);
     expect(await db.query('report_attachments'), [
