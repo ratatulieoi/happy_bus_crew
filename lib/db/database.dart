@@ -17,7 +17,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       p.join(dbPath, 'happy_bus.db'),
-      version: 9,
+      version: 10,
       onCreate: (db, v) async {
         await _createBusTable(db);
         await db.execute('''
@@ -38,9 +38,9 @@ class DatabaseHelper {
             uang_saku          INTEGER NOT NULL DEFAULT 0,
             bbm                INTEGER NOT NULL DEFAULT 0,
             uang_makan         INTEGER NOT NULL DEFAULT 0,
+            pembayaran_tagihan INTEGER NOT NULL DEFAULT 0,
             extra              INTEGER NOT NULL DEFAULT 0,
             extra_details      TEXT    NOT NULL DEFAULT '[]',
-            tagihan            INTEGER NOT NULL DEFAULT 0,
             nama_crew          TEXT    NOT NULL DEFAULT '',
             catatan            TEXT    NOT NULL DEFAULT ''
           )
@@ -125,6 +125,12 @@ class DatabaseHelper {
               'ALTER TABLE reports ADD COLUMN luar_kota_count INTEGER CHECK (luar_kota_count >= 0)');
           await db.execute(
               'ALTER TABLE reports ADD COLUMN dalam_kota_count INTEGER CHECK (dalam_kota_count >= 0)');
+        }
+        if (oldVersion < 10) {
+          await db.execute(
+              'ALTER TABLE reports ADD COLUMN pembayaran_tagihan INTEGER NOT NULL DEFAULT 0');
+          // Old Tagihan amounts were administrative bills. Do not relabel them as client payments.
+          await db.execute('UPDATE reports SET tagihan = 0');
         }
       },
     );

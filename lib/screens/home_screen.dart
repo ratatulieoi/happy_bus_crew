@@ -251,7 +251,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     ? 'Perjalanan pertama dimulai di sini'
                                     : 'Tidak ada laporan yang cocok',
                                 message: _reports.isEmpty
-                                    ? 'Buat laporan untuk mencatat kilometer, uang saku, dan struk perjalanan.'
+                                    ? 'Buat laporan untuk mencatat perjalanan dan lampiran gambar.'
                                     : 'Coba kata kunci lain atau tampilkan semua bus.',
                                 action: _reports.isEmpty
                                     ? null

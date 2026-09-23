@@ -14,9 +14,9 @@ Branch ini berasal dari `main` dan mempertahankan tampilan Flutter terbaru untuk
 - Riwayat laporan menampilkan nama bus yang nomor polisinya cocok dengan daftar bus saat ini. Pencarian menerima nama bus, nomor polisi, nama crew, dan tanggal. Jika nomor polisi lama tidak lagi cocok, laporan tetap menampilkan nomor polisi dan pengemudi.
 - **KM awal** dan **KM akhir** diisi manual pada setiap laporan. Keduanya tetap tampil di PDF. Tidak ada pelacakan kilometer, pengisian otomatis dari laporan sebelumnya, atau perhitungan jarak tempuh.
 - Pelacakan oli, pengingat ganti oli, dan pencatatan ganti oli tidak tersedia.
-- Laporan lama, lampiran struk, dan ekspor PDF tetap tersedia. Mengubah identitas bus tidak mengubah nomor polisi pada laporan lama.
+- Laporan lama, lampiran gambar, dan ekspor PDF tetap tersedia. Mengubah identitas bus tidak mengubah nomor polisi pada laporan lama.
 
-Database versi 9 menambahkan jumlah LK dan DK secara terpisah. Jumlah yang belum pernah dicatat pada laporan lama tetap kosong, bukan dianggap 0 atau 1. PDF menampilkan tanda `-` untuk jumlah yang belum dicatat dan tetap menampilkan kategori lama dari versi 8, jika ada. Migrasi versi 7 menambahkan rincian Extra tanpa mengubah laporan lama, nilai KM manual, atau lampiran. Nominal Extra lama tampil sebagai satu item **Extra lama** yang dapat diganti namanya. Migrasi dari versi sebelum 6 tetap memindahkan identitas bus dari pengaturan lama dan mengabaikan pengaturan oli.
+Database versi 9 menambahkan jumlah LK dan DK secara terpisah. Isian jumlah LK dan DK bersifat opsional; jika kosong, PDF menampilkan tanda `-`. Laporan lama tetap kosong untuk jumlah yang belum pernah dicatat, bukan dianggap 0 atau 1, dan tetap menampilkan kategori lama dari versi 8 jika ada. Database versi 10 memisahkan **Pembayaran tagihan** dari pengeluaran. Nilai Tagihan lama dikosongkan saat migrasi agar tidak dianggap sebagai pembayaran klien. Migrasi versi 7 menambahkan rincian Extra tanpa mengubah laporan lama, nilai KM manual, atau lampiran. Nominal Extra lama tampil sebagai satu item **Extra lama** yang dapat diganti namanya. Migrasi dari versi sebelum 6 tetap memindahkan identitas bus dari pengaturan lama dan mengabaikan pengaturan oli.
 
 ---
 
@@ -24,9 +24,9 @@ Database versi 9 menambahkan jumlah LK dan DK secara terpisah. Jumlah yang belum
 
 - **Form lengkap** sesuai contoh laporan asli:
   - Hari/Tgl Berangkat, Jam, Hari/Tgl Kembali, No. Polisi, Pengemudi, Kernet
-  - Jumlah **Luar Kota (LK)** dan **Dalam Kota (DK)** diisi terpisah, misalnya LK 3 dan DK 5 dalam satu laporan. Keduanya wajib diisi dengan bilangan bulat 0 atau lebih pada laporan baru. Nilai 0 berarti tidak ada perjalanan. Kedua jumlah tersimpan dan tampil di PDF.
+  - Jumlah **Luar Kota (LK)** dan **Dalam Kota (DK)** dapat diisi terpisah, misalnya LK 3 dan DK 5 dalam satu laporan. Keduanya opsional. Nilai 0 berarti tidak ada perjalanan, sedangkan isian kosong tampil sebagai `-` di PDF.
   - KM Awal & KM Akhir sebagai isian manual
-  - Uang saku dan rincian pengeluaran berurutan: BBM, uang makan, tagihan, lalu Extra
+  - Uang saku dan rincian pengeluaran: BBM, uang makan, lalu Extra. **Pembayaran tagihan** dari klien dicatat terpisah sebagai uang tunai yang dibayarkan kepada crew, bukan sebagai pengeluaran dan tidak mengubah sisa uang saku.
   - Extra dapat berisi banyak item. Tombol **Tambah Extra** menambah baris nama dan harga dalam rupiah. Setiap baris wajib memiliki nama dan harga lebih dari nol, atau dihapus jika tidak digunakan.
   - Nama dan harga setiap Extra tersimpan di laporan dan tampil di PDF. Total Extra dihitung dari seluruh item.
   - Total & selisih (surplus/defisit) dihitung otomatis

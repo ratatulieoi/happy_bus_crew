@@ -41,7 +41,7 @@ class ExtraExpense {
 /// Model data untuk Laporan Pertanggungjawaban Crew.
 ///
 /// Satu [Report] berisi seluruh field pada form: info header, kilometer,
-/// field keuangan (uang saku, BBM, uang makan, tagihan, daftar extra),
+/// field keuangan (uang saku, BBM, uang makan, pembayaran tagihan, daftar extra),
 /// serta data tanda tangan crew.
 
 class Report {
@@ -70,7 +70,7 @@ class Report {
   int uangSaku;
   int bbm;
   int uangMakan;
-  int tagihan;
+  int pembayaranTagihan;
 
   /// Daftar pengeluaran extra, masing-masing bernama dan berharga.
   /// Total extra adalah jumlah seluruh harga dan dihitung tepat sekali.
@@ -96,7 +96,7 @@ class Report {
     required this.uangSaku,
     required this.bbm,
     required this.uangMakan,
-    required this.tagihan,
+    required this.pembayaranTagihan,
     required this.namaCrew,
     this.catatan = '',
     this.tripType = TripType.unspecified,
@@ -111,8 +111,9 @@ class Report {
   /// Jumlah seluruh harga extra. Setiap harga dihitung tepat satu kali.
   int get extra => extras.fold(0, (sum, item) => sum + item.amount);
 
-  /// Total pengeluaran = BBM + Uang Makan + Tagihan + jumlah Extra.
-  int get totalPengeluaran => bbm + uangMakan + tagihan + extra;
+  /// Total pengeluaran = BBM + uang makan + jumlah Extra.
+  /// Pembayaran tagihan klien dicatat terpisah dan tidak mengurangi sisa.
+  int get totalPengeluaran => bbm + uangMakan + extra;
 
   /// Sisa = Uang Saku - total pengeluaran.
   int get sisa => uangSaku - totalPengeluaran;
@@ -141,7 +142,7 @@ class Report {
       'uang_makan': uangMakan,
       'extra': extra,
       'extra_details': jsonEncode([for (final item in extras) item.toMap()]),
-      'tagihan': tagihan,
+      'pembayaran_tagihan': pembayaranTagihan,
       'nama_crew': namaCrew,
       'catatan': catatan,
     };
@@ -166,7 +167,7 @@ class Report {
       uangSaku: map['uang_saku'] as int? ?? 0,
       bbm: map['bbm'] as int? ?? 0,
       uangMakan: map['uang_makan'] as int? ?? 0,
-      tagihan: map['tagihan'] as int? ?? 0,
+      pembayaranTagihan: map['pembayaran_tagihan'] as int? ?? 0,
       extras: _extrasFromMap(map),
       namaCrew: map['nama_crew'] as String? ?? '',
       catatan: map['catatan'] as String? ?? '',
@@ -218,7 +219,7 @@ class Report {
     int? uangSaku,
     int? bbm,
     int? uangMakan,
-    int? tagihan,
+    int? pembayaranTagihan,
     List<ExtraExpense>? extras,
     String? namaCrew,
     String? catatan,
@@ -240,7 +241,7 @@ class Report {
       uangSaku: uangSaku ?? this.uangSaku,
       bbm: bbm ?? this.bbm,
       uangMakan: uangMakan ?? this.uangMakan,
-      tagihan: tagihan ?? this.tagihan,
+      pembayaranTagihan: pembayaranTagihan ?? this.pembayaranTagihan,
       extras: extras ?? this.extras,
       namaCrew: namaCrew ?? this.namaCrew,
       catatan: catatan ?? this.catatan,

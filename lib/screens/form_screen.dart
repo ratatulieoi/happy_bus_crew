@@ -37,13 +37,12 @@ class _FormScreenState extends State<FormScreen> {
   late final TextEditingController _uangSaku;
   late final TextEditingController _bbm;
   late final TextEditingController _uangMakan;
-  late final TextEditingController _tagihan;
+  late final TextEditingController _pembayaranTagihan;
   final List<TextEditingController> _extraNames = [];
   final List<TextEditingController> _extraAmounts = [];
   String? _extraError;
   late final TextEditingController _luarKotaCount;
   late final TextEditingController _dalamKotaCount;
-  String? _tripCountError;
   final List<File> _attachments = [];
   List<String> _initialValues = [];
   List<String> _initialAttachments = [];
@@ -72,7 +71,7 @@ class _FormScreenState extends State<FormScreen> {
         _uangSaku,
         _bbm,
         _uangMakan,
-        _tagihan,
+        _pembayaranTagihan,
         ..._extraNames,
         ..._extraAmounts,
       ];
@@ -116,7 +115,8 @@ class _FormScreenState extends State<FormScreen> {
     _uangSaku = TextEditingController(text: amount(r?.uangSaku));
     _bbm = TextEditingController(text: amount(r?.bbm));
     _uangMakan = TextEditingController(text: amount(r?.uangMakan));
-    _tagihan = TextEditingController(text: amount(r?.tagihan));
+    _pembayaranTagihan =
+        TextEditingController(text: amount(r?.pembayaranTagihan));
     if (r != null) {
       for (final item in r.extras) {
         _extraNames.add(TextEditingController(text: item.name));
@@ -131,10 +131,7 @@ class _FormScreenState extends State<FormScreen> {
 
   void _changed() {
     if (mounted && !_loading) {
-      setState(() {
-        _extraError = null;
-        _tripCountError = null;
-      });
+      setState(() => _extraError = null);
     }
   }
 
@@ -272,7 +269,7 @@ class _FormScreenState extends State<FormScreen> {
                               [
                                 'Isi jadwal, nama crew, dan kilometer bus.',
                                 'Catat uang saku dan rincian pengeluaran.',
-                                'Tambahkan nama pembuat, catatan, dan struk.'
+                                'Tambahkan nama pembuat, catatan, dan lampiran.'
                               ][_step],
                               style: const TextStyle(color: AppColors.muted)),
                           const SizedBox(height: 24),
@@ -367,6 +364,13 @@ class _FormScreenState extends State<FormScreen> {
           const SizedBox(height: 16),
           _dateField(_berangkat, 'Tanggal berangkat'),
           const SizedBox(height: 16),
+          _dateField(_kembali, 'Tanggal kembali'),
+          if (_dateOrderWarning) ...[
+            const SizedBox(height: 12),
+            _notice(
+                'Tanggal kembali lebih awal dari keberangkatan. Periksa kembali jadwalnya.')
+          ],
+          const SizedBox(height: 16),
           _text(_jam, 'Jam berangkat',
               hint: '08:00',
               keyboardType: TextInputType.datetime,
@@ -374,13 +378,6 @@ class _FormScreenState extends State<FormScreen> {
                   onPressed: _pickTime,
                   tooltip: 'Pilih jam berangkat',
                   icon: const Icon(Icons.schedule_rounded, size: 20))),
-          const SizedBox(height: 16),
-          _dateField(_kembali, 'Tanggal kembali'),
-          if (_dateOrderWarning) ...[
-            const SizedBox(height: 12),
-            _notice(
-                'Tanggal kembali lebih awal dari keberangkatan. Periksa kembali jadwalnya.')
-          ],
         ])),
         const SizedBox(height: 16),
         SectionCard(
@@ -411,20 +408,14 @@ class _FormScreenState extends State<FormScreen> {
           const Text('Jumlah perjalanan',
               style: TextStyle(fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          const Text('Isi jumlah LK dan DK. Gunakan 0 jika tidak ada.',
+          const Text('Opsional. Isi jumlah LK dan DK jika diperlukan.',
               style: TextStyle(color: AppColors.muted, fontSize: 12)),
           const SizedBox(height: 16),
           AdaptivePair(
             first: _countField(_luarKotaCount, 'Luar Kota (LK)'),
             second: _countField(_dalamKotaCount, 'Dalam Kota (DK)'),
           ),
-          if (_tripCountError != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(_tripCountError!,
-                  style: const TextStyle(color: AppColors.danger)),
-            )
-          else if (_isEdit && !widget.report!.hasTripCounts)
+          if (_isEdit && !widget.report!.hasTripCounts)
             Padding(
               padding: const EdgeInsets.only(top: 8),
               child: Text(
@@ -468,9 +459,17 @@ class _FormScreenState extends State<FormScreen> {
           const SizedBox(height: 16),
           _numberField(_uangMakan, 'Uang makan'),
           const SizedBox(height: 16),
-          _numberField(_tagihan, 'Tagihan'),
-          const SizedBox(height: 16),
           ..._extraFields(),
+        ])),
+        const SizedBox(height: 16),
+        SectionCard(
+            child: Column(children: [
+          const SectionHeading(
+              title: 'Pembayaran tagihan',
+              subtitle:
+                  'Uang tunai dari klien untuk biaya bus yang dibayarkan kepada crew. Tidak masuk hitungan pengeluaran atau sisa uang saku.',
+              icon: Icons.payments_outlined),
+          _numberField(_pembayaranTagihan, 'Pembayaran tagihan'),
         ])),
         const SizedBox(height: 16),
         _balanceCard(),
@@ -494,9 +493,8 @@ class _FormScreenState extends State<FormScreen> {
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           SectionHeading(
-              title: 'Struk BBM',
-              subtitle:
-                  '${_attachments.length} foto dilampirkan. Setiap foto mendapat halaman sendiri di PDF.',
+              title: 'Lampiran',
+              subtitle: '${_attachments.length} gambar dilampirkan.',
               icon: Icons.photo_library_outlined),
           _attachmentSection(),
         ])),
@@ -679,12 +677,8 @@ class _FormScreenState extends State<FormScreen> {
                 Icon(Icons.add_photo_alternate_outlined,
                     size: 32, color: AppColors.muted),
                 SizedBox(height: 10),
-                Text('Belum ada struk',
+                Text('Belum ada lampiran',
                     style: TextStyle(fontWeight: FontWeight.w600)),
-                SizedBox(height: 4),
-                Text('Ambil foto yang jelas dan tidak terpotong.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: AppColors.muted, fontSize: 12))
               ]))
         else
           SizedBox(
@@ -714,14 +708,14 @@ class _FormScreenState extends State<FormScreen> {
                                 decoration: BoxDecoration(
                                     color: AppColors.ink,
                                     borderRadius: BorderRadius.circular(6)),
-                                child: Text('Struk ${i + 1}',
+                                child: Text('Lampiran ${i + 1}',
                                     style: const TextStyle(
                                         color: Colors.white, fontSize: 11)))),
                         Positioned(
                             top: 0,
                             right: 0,
                             child: IconButton.filled(
-                                tooltip: 'Hapus struk ${i + 1}',
+                                tooltip: 'Hapus lampiran ${i + 1}',
                                 style: IconButton.styleFrom(
                                     backgroundColor: AppColors.ink,
                                     foregroundColor: Colors.white),
@@ -854,28 +848,7 @@ class _FormScreenState extends State<FormScreen> {
     });
   }
 
-  bool _validateTripCounts() {
-    final lk = _luarKotaCount.text;
-    final dk = _dalamKotaCount.text;
-    // Editing another field must not invent counts for an old report.
-    if (_isEdit &&
-        widget.report!.luarKotaCount == null &&
-        widget.report!.dalamKotaCount == null &&
-        lk.isEmpty && dk.isEmpty) return true;
-    final lkCount = int.tryParse(lk);
-    final dkCount = int.tryParse(dk);
-    if (lkCount != null && dkCount != null && lkCount >= 0 && dkCount >= 0) {
-      return true;
-    }
-    setState(() => _tripCountError =
-        'Isi jumlah LK dan DK dengan angka bulat 0 atau lebih.');
-    _goToStep(0);
-    showAppMessage(context, _tripCountError!);
-    return false;
-  }
-
   void _nextStep() {
-    if (_step == 0 && !_validateTripCounts()) return;
     if (_step == 1 && !_validateExtras()) {
       showAppMessage(context, _extraError!);
       return;
@@ -926,7 +899,7 @@ class _FormScreenState extends State<FormScreen> {
         uangSaku: parseRupiahInput(_uangSaku.text),
         bbm: parseRupiahInput(_bbm.text),
         uangMakan: parseRupiahInput(_uangMakan.text),
-        tagihan: parseRupiahInput(_tagihan.text),
+        pembayaranTagihan: parseRupiahInput(_pembayaranTagihan.text),
         namaCrew: _namaCrew.text.trim(),
         catatan: _catatan.text.trim(),
         extras: [
@@ -940,7 +913,6 @@ class _FormScreenState extends State<FormScreen> {
   Future<void> _onSave() async {
     if (_busy || _loading) return;
     FocusScope.of(context).unfocus();
-    if (!_validateTripCounts()) return;
     if (!_validateExtras()) {
       _goToStep(1);
       showAppMessage(context, _extraError!);
@@ -966,7 +938,6 @@ class _FormScreenState extends State<FormScreen> {
   Future<void> _onPreview() async {
     if (_busy || _loading) return;
     FocusScope.of(context).unfocus();
-    if (!_validateTripCounts()) return;
     if (!_validateExtras()) {
       _goToStep(1);
       showAppMessage(context, _extraError!);

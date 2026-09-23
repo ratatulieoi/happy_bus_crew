@@ -31,7 +31,7 @@ void main() {
           ExtraExpense(name: 'Parkir', amount: 20000),
           ExtraExpense(name: 'Tol', amount: 30000),
         ],
-        tagihan: 50000,
+        pembayaranTagihan: 50000,
         namaCrew: 'Budi',
         catatan: 'Catatan perjalanan',
       );
@@ -141,13 +141,17 @@ void main() {
     }
   });
 
-  test('financial calculations retain existing contract', () {
+  test('client bus-fee payments stay separate from expenses and balance', () {
     final r = report();
+    expect(r.pembayaranTagihan, 50000);
+    expect(r.toMap()['pembayaran_tagihan'], 50000);
+    expect(Report.fromMap(r.toMap()).pembayaranTagihan, 50000);
     expect(r.extra, 50000);
-    expect(r.totalPengeluaran, 800000);
-    expect(r.sisa, 200000);
-    expect(r.copyWith(uangSaku: 500000).sisa, -300000);
-    expect(r.copyWith(uangSaku: 800000).sisa, 0);
+    expect(r.totalPengeluaran, 750000);
+    expect(r.sisa, 250000);
+    expect(r.copyWith(pembayaranTagihan: 900000).sisa, 250000);
+    expect(r.copyWith(uangSaku: 500000).sisa, -250000);
+    expect(r.copyWith(uangSaku: 750000).sisa, 0);
   });
 
   test('multiple extras sum exactly once and round-trip with names', () {
@@ -157,7 +161,7 @@ void main() {
       ExtraExpense(name: 'Cuci bus', amount: 50000),
     ]);
     expect(r.extra, 220000);
-    expect(r.totalPengeluaran, 600000 + 100000 + 50000 + 220000);
+    expect(r.totalPengeluaran, 600000 + 100000 + 220000);
     final restored = Report.fromMap(r.toMap());
     expect(restored.extras.map((item) => item.name),
         ['Parkir', 'Tol', 'Cuci bus']);
@@ -173,15 +177,18 @@ void main() {
       'uang_makan': 50000,
       'extra': 75000,
       'tagihan': 25000,
+      'pembayaran_tagihan': 40000,
     });
     expect(restored.extras, hasLength(1));
     expect(restored.extras.single.name, 'Extra lama');
     expect(restored.extras.single.amount, 75000);
     expect(restored.extra, 75000);
-    expect(restored.totalPengeluaran, 250000);
+    expect(restored.pembayaranTagihan, 40000);
+    expect(restored.totalPengeluaran, 225000);
     final resaved = Report.fromMap(restored.toMap());
     expect(resaved.extras.single.amount, 75000);
-    expect(resaved.totalPengeluaran, 250000);
+    expect(resaved.pembayaranTagihan, 40000);
+    expect(resaved.totalPengeluaran, 225000);
   });
 
   test('malformed extra details fall back to the complete saved total', () {
@@ -276,8 +283,9 @@ void main() {
     expect(content, contains('50.000'));
     // PDF text streams can split words into separate drawing commands.
     expect(content.indexOf('BBM'), lessThan(content.indexOf('Makan')));
-    expect(content.indexOf('Makan'), lessThan(content.indexOf('Tagihan')));
-    expect(content.indexOf('Tagihan'), lessThan(content.indexOf('Extra')));
+    expect(content.indexOf('Makan'), lessThan(content.indexOf('Extra')));
+    expect(content, contains('Pembayaran tagihan'));
+    expect(content, contains('50.000'));
   });
 
   test('PDF paginates many extras without dropping entries', () async {
@@ -324,6 +332,10 @@ void main() {
     final content = streams.join('\n');
     expect(content, contains('Awal'));
     expect(content, contains('Akhir'));
+    expect(content, contains('Lampiran 1'));
+    expect(content, contains('Lampiran 2'));
+    expect(content, isNot(contains('Struk Pembelian Bensin')));
+    expect(content, isNot(contains('Bensin')));
     expect(content, contains('1.000'));
     expect(content, contains('1.250'));
     expect(content, isNot(contains('Jarak')));

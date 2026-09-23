@@ -36,6 +36,7 @@ void main() {
       'bbm': 600000,
       'uang_makan': 100000,
       'tagihan': 50000,
+      'pembayaran_tagihan': 50000,
       'luar_kota_count': 3,
       'dalam_kota_count': 5,
     }).copyWith(extras: const [
@@ -51,7 +52,8 @@ void main() {
     expect(restored.luarKotaCount, 3);
     expect(restored.dalamKotaCount, 5);
     expect(restored.extra, 50000);
-    expect(restored.totalPengeluaran, 800000);
+    expect(restored.pembayaranTagihan, 50000);
+    expect(restored.totalPengeluaran, 750000);
     expect(restored.kmAwal, 123);
     expect(restored.kmAkhir, 456);
     expect(await store.getAttachments(id), receipts);
@@ -74,7 +76,7 @@ void main() {
     expect(await store.getAttachments(id), receipts);
   });
 
-  for (final version in [6, 7, 8]) {
+  for (final version in [6, 7, 8, 9]) {
   test('v$version upgrade preserves totals, buses, KM, extras and receipt links',
       () async {
     final legacy = await databaseFactory.openDatabase(
@@ -107,9 +109,15 @@ void main() {
             await db.execute(
                 "ALTER TABLE reports ADD COLUMN extra_details TEXT NOT NULL DEFAULT '[]'");
           }
-          if (version == 8) {
+          if (version >= 8) {
             await db.execute(
                 "ALTER TABLE reports ADD COLUMN trip_type TEXT NOT NULL DEFAULT ''");
+          }
+          if (version >= 9) {
+            await db.execute(
+                'ALTER TABLE reports ADD COLUMN luar_kota_count INTEGER CHECK (luar_kota_count >= 0)');
+            await db.execute(
+                'ALTER TABLE reports ADD COLUMN dalam_kota_count INTEGER CHECK (dalam_kota_count >= 0)');
           }
           await db.execute('''
             CREATE TABLE buses (
@@ -139,6 +147,7 @@ void main() {
               'km_akhir': 456,
               'extra': i == 1 ? 75000 : 0,
               'bbm': 100000,
+              'tagihan': 20000 * i,
               if (version >= 7 && i == 1)
                 'extra_details': '[{"name":"Parkir","amount":75000}]',
               if (version == 8)
@@ -157,15 +166,17 @@ void main() {
     await legacy.close();
 
     final upgraded = await store.db;
-    expect(await upgraded.getVersion(), 9);
+    expect(await upgraded.getVersion(), 10);
     final rows = await upgraded.query('reports', orderBy: 'id');
     for (var i = 0; i < rows.length; i++) {
       expect(rows[i], {
         ...originalRows[i],
         if (version == 6) 'extra_details': '[]',
         if (version < 8) 'trip_type': '',
-        'luar_kota_count': null,
-        'dalam_kota_count': null,
+        if (version < 9) 'luar_kota_count': null,
+        if (version < 9) 'dalam_kota_count': null,
+        'pembayaran_tagihan': 0,
+        'tagihan': 0,
       });
     }
     expect(await upgraded.query('report_attachments'), originalReceipts);
@@ -189,7 +200,7 @@ void main() {
     expect(report.tripType, TripType.unspecified);
     expect(report.extras.single.name, version == 6 ? 'Extra lama' : 'Parkir');
     expect(report.extras.single.amount, 75000);
-    expect(report.totalPengeluaran, 175000);
+    expect(report.totalPengeluaran, 100000);
     expect((await store.getReport(2))!.extras, isEmpty);
     await store.saveReportWithAttachments(report, ['/saved/receipt.jpg']);
     await store.close();

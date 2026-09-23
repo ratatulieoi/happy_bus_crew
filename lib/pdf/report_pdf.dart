@@ -20,7 +20,7 @@ class ReportPdfBuilder {
 
   /// Membuat [pw.Document] dari sebuah [Report].
   /// [logoBytes] opsional; bila null akan memuat aset default.
-  /// [attachmentImages] daftar bytes gambar lampiran (struk, dll).
+  /// [attachmentImages] bytes untuk gambar-gambar lampiran.
   static Future<pw.Document> build(
     Report r, {
     Uint8List? logoBytes,
@@ -42,6 +42,8 @@ class ReportPdfBuilder {
           pw.SizedBox(height: 14),
           _buildSectionTitle('Rincian Keuangan'),
           _buildFinanceTable(r),
+          pw.SizedBox(height: 8),
+          _buildPaymentTagihan(r),
           pw.SizedBox(height: 12),
           _buildSummary(r),
           if (r.catatan.isNotEmpty) ...[
@@ -65,7 +67,7 @@ class ReportPdfBuilder {
       ),
     );
 
-    // Lampiran: setiap gambar di halaman baru
+    // Add each attachment image on its own page.
     for (int i = 0; i < attachmentImages.length; i++) {
       final imgBytes = attachmentImages[i];
       if (imgBytes.isEmpty) continue;
@@ -82,11 +84,6 @@ class ReportPdfBuilder {
                   fontSize: 14,
                   fontWeight: pw.FontWeight.bold,
                 ),
-              ),
-              pw.SizedBox(height: 8),
-              pw.Text(
-                'Struk Pembelian Bensin',
-                style: pw.TextStyle(fontSize: 10, color: _gray),
               ),
               pw.SizedBox(height: 12),
               pw.Expanded(
@@ -209,7 +206,6 @@ class ReportPdfBuilder {
       {'label': 'Uang Saku', 'value': r.uangSaku},
       {'label': 'BBM', 'value': r.bbm},
       {'label': 'Uang Makan', 'value': r.uangMakan},
-      {'label': 'Tagihan', 'value': r.tagihan},
       {'label': 'Extra (total)', 'value': r.extra},
     ];
 
@@ -259,6 +255,15 @@ class ReportPdfBuilder {
       children: rows,
     );
   }
+
+  static pw.Widget _buildPaymentTagihan(Report r) => pw.Container(
+        padding: const pw.EdgeInsets.all(8),
+        decoration: pw.BoxDecoration(border: pw.Border.all(color: _line)),
+        child: _summaryRow(
+          'Pembayaran tagihan',
+          formatRupiah(r.pembayaranTagihan),
+        ),
+      );
 
   static pw.Widget _tableCell(String text,
       {bool bold = false, pw.TextAlign align = pw.TextAlign.left}) {
