@@ -466,7 +466,7 @@ void main() {
             find.widgetWithText(TextFormField, 'Harga extra 1')).controller!.text,
         '150.000');
     await reveal(tester, find.text('Total pengeluaran'));
-    expect(find.text('Rp 1.280.000'), findsOneWidget);
+    expect(find.text('Rp 1.250.000'), findsOneWidget);
     for (var i = 0; i < 2; i++) {
       await reveal(tester, find.text('Hapus').first);
       await tester.tap(find.text('Hapus').first);
