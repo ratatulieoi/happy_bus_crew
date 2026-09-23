@@ -216,7 +216,7 @@ void main() {
     expect((await store.getSelectedBus())!.name, 'Selected');
     expect((await store.getSelectedBus())!.plate, 'L 4004 AB');
     final db = await store.db;
-    expect(await db.getVersion(), 9);
+    expect(await db.getVersion(), 10);
     expect(await db.query('reports'), [
       {
         'id': 7,
