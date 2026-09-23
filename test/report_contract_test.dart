@@ -284,7 +284,8 @@ void main() {
     // PDF text streams can split words into separate drawing commands.
     expect(content.indexOf('BBM'), lessThan(content.indexOf('Makan')));
     expect(content.indexOf('Makan'), lessThan(content.indexOf('Extra')));
-    expect(content, contains('Pembayaran tagihan'));
+    expect(content, contains('Pembayaran'));
+    expect(content, contains('tagihan'));
     expect(content, contains('50.000'));
   });
 

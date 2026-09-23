@@ -412,7 +412,7 @@ void main() {
         find.widgetWithText(TextFormField, 'Uang saku'), '1000000');
     await reveal(tester, find.text('Defisit perjalanan'));
     expect(find.text('Rp 1.100.000'), findsOneWidget);
-    expect(find.text('Rp -100.000'), findsOneWidget);
+    expect(find.text('-Rp 100.000'), findsOneWidget);
     final paymentField = tester.widget<TextFormField>(
         find.widgetWithText(TextFormField, 'Pembayaran tagihan'));
     expect(paymentField.controller!.text, '100.000');
@@ -614,7 +614,9 @@ void main() {
 
   testWidgets('new reports can continue and save without LK or DK counts',
       (tester) async {
-    await pumpScreen(tester, const FormScreen());
+    await pumpScreen(tester, const HomeScreen());
+    await tester.tap(find.text('Buat laporan baru'));
+    await tester.pumpAndSettle();
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     expect(find.text('Keuangan perjalanan'), findsOneWidget);

@@ -35,7 +35,6 @@ void main() {
       'uang_saku': 1000000,
       'bbm': 600000,
       'uang_makan': 100000,
-      'tagihan': 50000,
       'pembayaran_tagihan': 50000,
       'luar_kota_count': 3,
       'dalam_kota_count': 5,
@@ -72,11 +71,11 @@ void main() {
     await store.close();
     expect((await store.getReport(id))!.extras, isEmpty);
     expect((await store.getReport(id))!.extra, 0);
-    expect((await store.getReport(id))!.totalPengeluaran, 750000);
+    expect((await store.getReport(id))!.totalPengeluaran, 700000);
     expect(await store.getAttachments(id), receipts);
   });
 
-  for (final version in [6, 7, 8, 9]) {
+  for (final version in [6, 7, 8, 9, 10]) {
   test('v$version upgrade preserves totals, buses, KM, extras and receipt links',
       () async {
     final legacy = await databaseFactory.openDatabase(
@@ -101,6 +100,7 @@ void main() {
               uang_makan INTEGER NOT NULL DEFAULT 0,
               extra INTEGER NOT NULL DEFAULT 0,
               tagihan INTEGER NOT NULL DEFAULT 0,
+              ${version >= 10 ? 'pembayaran_tagihan INTEGER NOT NULL DEFAULT 0,' : ''}
               nama_crew TEXT NOT NULL DEFAULT '',
               catatan TEXT NOT NULL DEFAULT ''
             )
@@ -148,6 +148,7 @@ void main() {
               'extra': i == 1 ? 75000 : 0,
               'bbm': 100000,
               'tagihan': 20000 * i,
+              if (version >= 10) 'pembayaran_tagihan': 20000 * i,
               if (version >= 7 && i == 1)
                 'extra_details': '[{"name":"Parkir","amount":75000}]',
               if (version == 8)

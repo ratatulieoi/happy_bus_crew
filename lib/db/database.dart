@@ -129,8 +129,10 @@ class DatabaseHelper {
         if (oldVersion < 10) {
           await db.execute(
               'ALTER TABLE reports ADD COLUMN pembayaran_tagihan INTEGER NOT NULL DEFAULT 0');
-          // Old Tagihan amounts were administrative bills. Do not relabel them as client payments.
-          await db.execute('UPDATE reports SET tagihan = 0');
+          final columns = await db.rawQuery('PRAGMA table_info(reports)');
+          if (columns.any((column) => column['name'] == 'tagihan')) {
+            await db.execute('UPDATE reports SET tagihan = 0');
+          }
         }
       },
     );
