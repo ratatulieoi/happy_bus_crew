@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:happy_bus_crew/db/database.dart';
+import 'package:happy_bus_crew/models/bus.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -24,6 +25,17 @@ void main() {
   tearDown(() async {
     await store.close();
     await temporary.delete(recursive: true);
+  });
+
+  test('bus name lookup matches a plate loosely and never guesses', () {
+    const buses = [
+      Bus(id: 1, name: 'Happy Bus 01', plate: 'B 1001 XX'),
+      Bus(id: 2, name: 'Happy Bus 02', plate: 'B 1002 XX'),
+    ];
+    expect(busNameForPlate(buses, 'B 1001 XX'), 'Happy Bus 01');
+    expect(busNameForPlate(buses, '  b 1002 xx '), 'Happy Bus 02');
+    expect(busNameForPlate(buses, 'L 9 ZZ'), isEmpty);
+    expect(busNameForPlate(const [], 'B 1001 XX'), isEmpty);
   });
 
   Future<void> createLegacyDatabase(Map<String, String> settings) async {
@@ -131,7 +143,8 @@ void main() {
     expect(await db.query('report_attachments'), receiptsBefore);
   });
 
-  test('deleting the last bus clears selection and permits a new bus', () async {
+  test('deleting the last bus clears selection and permits a new bus',
+      () async {
     final id = await store.saveBus(name: 'Only bus', plate: 'B 1001 XX');
     await store.deleteBus(id);
     await store.close();
@@ -216,7 +229,7 @@ void main() {
     expect((await store.getSelectedBus())!.name, 'Selected');
     expect((await store.getSelectedBus())!.plate, 'L 4004 AB');
     final db = await store.db;
-    expect(await db.getVersion(), 10);
+    expect(await db.getVersion(), 12);
     expect(await db.query('reports'), [
       {
         'id': 7,
@@ -227,7 +240,9 @@ void main() {
         'trip_type': '',
         'luar_kota_count': null,
         'dalam_kota_count': null,
+        'trip_periods': null,
         'pembayaran_tagihan': 0,
+        'nama_tamu': '',
       }
     ]);
     expect(await db.query('report_attachments'), [

@@ -1,6 +1,6 @@
 import 'dart:io';
-import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -8,6 +8,8 @@ import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../db/database.dart';
+import '../models/bus.dart';
 import '../models/report.dart';
 import '../pdf/report_pdf.dart';
 import '../ui/app_theme.dart';
@@ -50,6 +52,7 @@ class _PreviewScreenState extends State<PreviewScreen> {
     try {
       final document = await ReportPdfBuilder.build(
         widget.report,
+        busName: await _busName(),
         attachmentImages: widget.attachmentImages,
       );
       final bytes = await document.save();
@@ -82,6 +85,20 @@ class _PreviewScreenState extends State<PreviewScreen> {
   }
 
   bool get _canExport => !_building && _bytes != null && _busyAction == null;
+
+  bool get _isDesktop =>
+      !kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS);
+
+  /// The report stores only a plate, so the saved bus name is read on demand.
+  /// An unreadable bus list still leaves the plate to identify the trip.
+  Future<String> _busName() async {
+    try {
+      final buses = await DatabaseHelper.instance.getBuses();
+      return busNameForPlate(buses, widget.report.noPolisi);
+    } catch (_) {
+      return '';
+    }
+  }
 
   Future<void> _export(String action) async {
     if (!_canExport) return;
@@ -133,6 +150,18 @@ class _PreviewScreenState extends State<PreviewScreen> {
           .writeAsBytes(bytes, flush: true);
     }
 
+    if (_isDesktop) {
+      final downloads = await getDownloadsDirectory();
+      if (downloads != null) {
+        try {
+          return await writeTo(downloads);
+        } catch (_) {
+          // Fall through to the app documents directory below.
+        }
+      }
+      return writeTo(await getApplicationDocumentsDirectory());
+    }
+
     try {
       return await writeTo(Directory('/storage/emulated/0/Download'));
     } catch (_) {
@@ -179,72 +208,72 @@ class _PreviewScreenState extends State<PreviewScreen> {
       body: ContentWidth(
         maxWidth: 960,
         child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.report.ringkas,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
-                Text(
-                    '${formatTanggalPendek(widget.report.tanggalBuat)} • ${widget.attachmentImages.length} bukti terlampir',
-                    style: const TextStyle(color: AppColors.muted)),
-                const SizedBox(height: 8),
-                const Text(
-                    'Cubit atau ketuk dua kali untuk zoom. Geser untuk melihat detail, gunakan panah untuk berpindah halaman.',
-                    style: TextStyle(color: AppColors.muted, fontSize: 12)),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(16),
-                    child: _building
-                        ? const SectionCard(
-                            child: Center(
-                              child: Column(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    CircularProgressIndicator(),
-                                    SizedBox(height: 20),
-                                    Text('Menyiapkan laporan dan bukti…'),
-                                  ]),
-                            ),
-                          )
-                        : _error != null
-                            ? SectionCard(
-                                padding: EdgeInsets.zero,
-                                child: Center(
-                                  child: SingleChildScrollView(
-                                    child: EmptyMessage(
-                                      icon: Icons.description_outlined,
-                                      title: 'PDF belum siap',
-                                      message: _error!,
-                                      action: FilledButton.icon(
-                                          onPressed: _buildDocument,
-                                          icon: const Icon(Icons.refresh),
-                                          label: const Text('Coba lagi')),
-                                    ),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(widget.report.ringkas,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 4),
+              Text(
+                  '${formatTanggalPendek(widget.report.tanggalBuat)} • ${widget.attachmentImages.length} bukti terlampir',
+                  style: const TextStyle(color: AppColors.muted)),
+              const SizedBox(height: 8),
+              const Text(
+                  'Cubit atau ketuk dua kali untuk zoom. Geser untuk melihat detail, gunakan panah untuk berpindah halaman.',
+                  style: TextStyle(color: AppColors.muted, fontSize: 12)),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: _building
+                      ? const SectionCard(
+                          child: Center(
+                            child: Column(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  CircularProgressIndicator(),
+                                  SizedBox(height: 20),
+                                  Text('Menyiapkan laporan dan bukti…'),
+                                ]),
+                          ),
+                        )
+                      : _error != null
+                          ? SectionCard(
+                              padding: EdgeInsets.zero,
+                              child: Center(
+                                child: SingleChildScrollView(
+                                  child: EmptyMessage(
+                                    icon: Icons.description_outlined,
+                                    title: 'PDF belum siap',
+                                    message: _error!,
+                                    action: FilledButton.icon(
+                                        onPressed: _buildDocument,
+                                        icon: const Icon(Icons.refresh),
+                                        label: const Text('Coba lagi')),
                                   ),
                                 ),
-                              )
-                            : PdfPreview.builder(
-                                build: _previewBytes,
-                                dpi: 144,
-                                pagesBuilder: (_, pages) =>
-                                    ZoomablePdfPages(pages: pages),
-                                canChangeOrientation: false,
-                                canChangePageFormat: false,
-                                canDebug: false,
-                                allowPrinting: false,
-                                allowSharing: false,
-                                useActions: false,
-                                pdfFileName: 'Laporan_Crew.pdf',
                               ),
-                  ),
+                            )
+                          : PdfPreview.builder(
+                              build: _previewBytes,
+                              dpi: 144,
+                              pagesBuilder: (_, pages) =>
+                                  ZoomablePdfPages(pages: pages),
+                              canChangeOrientation: false,
+                              canChangePageFormat: false,
+                              canDebug: false,
+                              allowPrinting: false,
+                              allowSharing: false,
+                              useActions: false,
+                              pdfFileName: 'Laporan_Crew.pdf',
+                            ),
                 ),
-              ],
-            ),
+              ),
+            ],
+          ),
         ),
       ),
       bottomNavigationBar: BottomActionBar(
@@ -261,8 +290,10 @@ class _PreviewScreenState extends State<PreviewScreen> {
             ],
             Row(children: [
               _action('Simpan', Icons.save_alt_rounded, primary: true),
-              const SizedBox(width: 8),
-              _action('Bagikan', Icons.ios_share_rounded),
+              if (!_isDesktop) ...[
+                const SizedBox(width: 8),
+                _action('Bagikan', Icons.ios_share_rounded),
+              ],
               const SizedBox(width: 8),
               _action('Cetak', Icons.print_outlined),
             ]),

@@ -17,7 +17,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       p.join(dbPath, 'happy_bus.db'),
-      version: 10,
+      version: 12,
       onCreate: (db, v) async {
         await _createBusTable(db);
         await db.execute('''
@@ -28,11 +28,13 @@ class DatabaseHelper {
             jam_berangkat      TEXT    NOT NULL DEFAULT '',
             hari_tgl_kembali   TEXT    NOT NULL DEFAULT '',
             no_polisi          TEXT    NOT NULL DEFAULT '',
+            nama_tamu          TEXT    NOT NULL DEFAULT '',
             pengemudi          TEXT    NOT NULL DEFAULT '',
             kernet             TEXT    NOT NULL DEFAULT '',
             trip_type          TEXT    NOT NULL DEFAULT '',
             luar_kota_count    INTEGER CHECK (luar_kota_count >= 0),
             dalam_kota_count   INTEGER CHECK (dalam_kota_count >= 0),
+            trip_periods       TEXT,
             km_awal            INTEGER NOT NULL DEFAULT 0,
             km_akhir           INTEGER NOT NULL DEFAULT 0,
             uang_saku          INTEGER NOT NULL DEFAULT 0,
@@ -133,6 +135,13 @@ class DatabaseHelper {
           if (columns.any((column) => column['name'] == 'tagihan')) {
             await db.execute('UPDATE reports SET tagihan = 0');
           }
+        }
+        if (oldVersion < 11) {
+          await db.execute('ALTER TABLE reports ADD COLUMN trip_periods TEXT');
+        }
+        if (oldVersion < 12) {
+          await db.execute(
+              "ALTER TABLE reports ADD COLUMN nama_tamu TEXT NOT NULL DEFAULT ''");
         }
       },
     );

@@ -9,6 +9,8 @@ import 'package:happy_bus_crew/screens/form_screen.dart';
 import 'package:happy_bus_crew/utils/format.dart';
 import 'package:intl/date_symbol_data_local.dart';
 
+import 'support/pdf_text.dart';
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
   setUpAll(() => initializeDateFormatting('id_ID'));
@@ -20,6 +22,7 @@ void main() {
         jamBerangkat: '08:00',
         hariTglKembali: 'Sabtu, 13/06/2026',
         noPolisi: 'B 1001 XX',
+        namaTamu: 'Bpk. Hartono',
         pengemudi: 'Budi',
         kernet: 'Agus',
         kmAwal: 1000,
@@ -46,7 +49,8 @@ void main() {
     expect(changed.catatan, 'Diubah');
   });
 
-  test('trip types round-trip, copy and preserve unspecified legacy reports', () {
+  test('trip types round-trip, copy and preserve unspecified legacy reports',
+      () {
     for (final type in TripType.values) {
       final original = report().copyWith(tripType: type);
       expect(original.toMap()['trip_type'], type.value);
@@ -56,15 +60,21 @@ void main() {
       expect(restored.totalPengeluaran, report().totalPengeluaran);
     }
     for (final value in [null, '', 'unknown', 123]) {
-      expect(Report.fromMap({'trip_type': value}).tripType, TripType.unspecified);
+      expect(
+          Report.fromMap({'trip_type': value}).tripType, TripType.unspecified);
     }
     expect(Report.fromMap({}).tripType.label, '-');
   });
 
   test('trip counts round-trip independently and preserve zero', () {
-    for (final counts in [[3, 5], [3, 0], [0, 5], [0, 0]]) {
-      final original = report().copyWith(
-          luarKotaCount: counts[0], dalamKotaCount: counts[1]);
+    for (final counts in [
+      [3, 5],
+      [3, 0],
+      [0, 5],
+      [0, 0]
+    ]) {
+      final original = report()
+          .copyWith(luarKotaCount: counts[0], dalamKotaCount: counts[1]);
       final restored = Report.fromMap(original.toMap());
       expect(restored.luarKotaCount, counts[0]);
       expect(restored.dalamKotaCount, counts[1]);
@@ -86,58 +96,37 @@ void main() {
 
   test('PDF shows both trip counts, including zero, instead of old category',
       () async {
-    for (final counts in [[3, 5], [0, 5], [3, 0], [0, 0]]) {
+    for (final counts in [
+      [3, 5],
+      [0, 5],
+      [3, 0],
+      [0, 0]
+    ]) {
       final doc = await ReportPdfBuilder.build(report().copyWith(
           tripType: TripType.luarKota,
-          luarKotaCount: counts[0], dalamKotaCount: counts[1]));
-      final raw = latin1.decode(await doc.save());
-      final streams = <String>[];
-      for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true)
-          .allMatches(raw)) {
-        try {
-          streams.add(latin1.decode(zlib.decode(latin1.encode(match.group(1)!))));
-        } on FormatException {
-          streams.add(match.group(1)!);
-        }
-      }
-      final content = streams.join('\n');
-      // Count values have their own PDF text operands after each label.
-      final header = content.substring(content.indexOf('Luar'), content.indexOf('Berangkat'));
-      final lk = header.substring(0, header.indexOf('Dalam'));
-      final dk = header.substring(header.indexOf('Dalam'));
-      expect(lk, contains('(${counts[0]})'));
-      expect(dk, contains('(${counts[1]})'));
-      expect(header, isNot(contains('Jenis')));
+          luarKotaCount: counts[0],
+          dalamKotaCount: counts[1]));
+      final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
+      expect(
+          text,
+          contains('Total LK ${counts[0]} / DK ${counts[1]} '
+              '${counts[0] + counts[1]}'));
+      expect(text, isNot(contains('Kategori lama')));
     }
   });
 
-  test('PDF retains old trip category without inventing counts',
-      () async {
+  test('PDF retains old trip category without inventing counts', () async {
     for (final type in TripType.values) {
-      final doc = await ReportPdfBuilder.build(report().copyWith(tripType: type));
-      final raw = latin1.decode(await doc.save());
-      final streams = <String>[];
-      for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true)
-          .allMatches(raw)) {
-        try {
-          streams.add(latin1.decode(zlib.decode(latin1.encode(match.group(1)!))));
-        } on FormatException {
-          streams.add(match.group(1)!);
-        }
-      }
-      final content = streams.join('\n');
-      final header = content.substring(content.indexOf('Luar'), content.indexOf('Berangkat'));
-      final lk = header.substring(0, header.indexOf('Dalam'));
-      final dk = header.substring(header.indexOf('Dalam'));
-      expect(lk, contains('(-)'));
-      expect(dk, contains('(-)'));
+      final doc =
+          await ReportPdfBuilder.build(report().copyWith(tripType: type));
+      final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
+      expect(text, contains('Total - -'));
       if (type == TripType.unspecified) {
-        expect(header, isNot(contains('Jenis')));
+        expect(text, isNot(contains('Kategori lama')));
       } else {
-        final legacy = header.substring(header.indexOf('Jenis'));
-        expect(legacy, contains(type == TripType.luarKota ? 'Luar' : 'Dalam'));
-        expect(legacy, contains('belum'));
+        expect(text, contains('Kategori lama: ${type.label}'));
       }
+      expect(RegExp(r'\d{2}/\d{2}/\d{4}').allMatches(text), hasLength(2));
     }
   });
 
@@ -199,7 +188,8 @@ void main() {
       '[{"name":"Parkir","amount":"20000"}]',
       '[{"name":"Parkir","amount":20000},null]',
     ]) {
-      final restored = Report.fromMap({'extra': 75000, 'extra_details': details});
+      final restored =
+          Report.fromMap({'extra': 75000, 'extra_details': details});
       expect(restored.extras.single.name, 'Extra lama');
       expect(restored.extra, 75000);
     }
@@ -211,6 +201,16 @@ void main() {
     expect(cleared.toMap()['extra_details'], '[]');
     expect(Report.fromMap(cleared.toMap()).extras, isEmpty);
     expect(cleared.totalPengeluaran, 700000);
+  });
+
+  test('guest name round-trips, survives edits and defaults when absent', () {
+    final r = report();
+    expect(r.namaTamu, 'Bpk. Hartono');
+    expect(r.toMap()['nama_tamu'], 'Bpk. Hartono');
+    expect(Report.fromMap(r.toMap()).namaTamu, 'Bpk. Hartono');
+    expect(r.copyWith(catatan: 'Edit').namaTamu, 'Bpk. Hartono');
+    final legacy = r.toMap()..remove('nama_tamu');
+    expect(Report.fromMap(legacy).namaTamu, isEmpty);
   });
 
   test('km awal and km akhir persist as manual per-report inputs', () {
@@ -264,29 +264,17 @@ void main() {
 
   test('PDF lists each extra by name and keeps totals consistent', () async {
     final doc = await ReportPdfBuilder.build(report());
-    final bytes = await doc.save();
-    final raw = latin1.decode(bytes);
-    final streams = <String>[];
-    for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true).allMatches(raw)) {
-      final data = latin1.encode(match.group(1)!);
-      try {
-        streams.add(latin1.decode(zlib.decode(data)));
-      } on FormatException {
-        streams.add(match.group(1)!);
-      }
-    }
-    final content = streams.join('\n');
-    expect(content, contains('Parkir'));
-    expect(content, contains('Tol'));
-    expect(content, contains('20.000'));
-    expect(content, contains('30.000'));
-    expect(content, contains('50.000'));
-    // PDF text streams can split words into separate drawing commands.
-    expect(content.indexOf('BBM'), lessThan(content.indexOf('Makan')));
-    expect(content.indexOf('Makan'), lessThan(content.indexOf('Extra')));
-    expect(content, contains('Pembayaran'));
-    expect(content, contains('tagihan'));
-    expect(content, contains('50.000'));
+    final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
+    expect(text, contains('BBM 600.000'));
+    expect(text, contains('Uang Makan 100.000'));
+    expect(text, contains('Parkir 20.000'));
+    expect(text, contains('Tol 30.000'));
+    expect(text.indexOf('BBM'), lessThan(text.indexOf('Uang Makan')));
+    expect(text.indexOf('Uang Makan'), lessThan(text.indexOf('Parkir')));
+    expect(text.indexOf('Parkir'), lessThan(text.indexOf('Tol')));
+    expect(text, contains('Total Pengeluaran 750.000'));
+    expect(text, contains('SISA Rp 250.000'));
+    expect(text, contains('Pembayaran tagihan Rp 50.000'));
   });
 
   test('PDF paginates many extras without dropping entries', () async {
@@ -312,7 +300,8 @@ void main() {
     expect(r.extra, 80000);
   });
 
-  test('PDF contains manual KM and receipts without calculated distance', () async {
+  test('PDF contains manual KM and receipts without calculated distance',
+      () async {
     final logo =
         (await rootBundle.load('assets/logo.png')).buffer.asUint8List();
     final doc = await ReportPdfBuilder.build(report(),
@@ -330,7 +319,8 @@ void main() {
     final raw = latin1.decode(bytes);
     expect(RegExp(r'/Type\s*/Page\b').allMatches(raw).length, 3);
     final streams = <String>[];
-    for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true).allMatches(raw)) {
+    for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true)
+        .allMatches(raw)) {
       final data = latin1.encode(match.group(1)!);
       try {
         streams.add(latin1.decode(zlib.decode(data)));

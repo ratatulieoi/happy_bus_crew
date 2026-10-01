@@ -5,8 +5,10 @@ import 'package:printing/printing.dart';
 
 void main() {
   const pages = [
-    PdfPreviewPageData(image: AssetImage('assets/logo.png'), width: 595, height: 842),
-    PdfPreviewPageData(image: AssetImage('assets/logo.png'), width: 595, height: 842),
+    PdfPreviewPageData(
+        image: AssetImage('assets/logo.png'), width: 595, height: 842),
+    PdfPreviewPageData(
+        image: AssetImage('assets/logo.png'), width: 595, height: 842),
   ];
 
   Future<void> pumpViewer(WidgetTester tester,
@@ -34,9 +36,12 @@ void main() {
       (tester) async {
     await pumpViewer(tester);
     expect(find.text('1 / 2'), findsOneWidget);
-    expect(tester.widget<IconButton>(find.byWidgetPredicate(
-        (widget) => widget is IconButton &&
-            widget.tooltip == 'Halaman sebelumnya')).onPressed, isNull);
+    expect(
+        tester
+            .widget<IconButton>(find.byWidgetPredicate((widget) =>
+                widget is IconButton && widget.tooltip == 'Halaman sebelumnya'))
+            .onPressed,
+        isNull);
     await tester.tap(find.byTooltip('Perbesar PDF'));
     await tester.pump();
     expect(controller(tester).value.getMaxScaleOnAxis(), closeTo(1.5, .001));
@@ -56,9 +61,12 @@ void main() {
     await tester.pump();
     expect(find.text('2 / 2'), findsOneWidget);
     expect(controller(tester).value.getMaxScaleOnAxis(), 1);
-    expect(tester.widget<IconButton>(find.byWidgetPredicate(
-        (widget) => widget is IconButton &&
-            widget.tooltip == 'Halaman berikutnya')).onPressed, isNull);
+    expect(
+        tester
+            .widget<IconButton>(find.byWidgetPredicate((widget) =>
+                widget is IconButton && widget.tooltip == 'Halaman berikutnya'))
+            .onPressed,
+        isNull);
     await tester.tap(find.byTooltip('Halaman sebelumnya'));
     await tester.pump();
     expect(find.text('1 / 2'), findsOneWidget);
@@ -70,8 +78,10 @@ void main() {
     await pumpViewer(tester);
     final viewer = find.byType(InteractiveViewer);
     final center = tester.getCenter(viewer);
-    final first = await tester.startGesture(center - const Offset(30, 0), pointer: 1);
-    final second = await tester.startGesture(center + const Offset(30, 0), pointer: 2);
+    final first =
+        await tester.startGesture(center - const Offset(30, 0), pointer: 1);
+    final second =
+        await tester.startGesture(center + const Offset(30, 0), pointer: 2);
     await tester.pump();
     await first.moveTo(center - const Offset(40, 0));
     await second.moveTo(center + const Offset(40, 0));
@@ -92,7 +102,8 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('zoom controls fit narrow screens with large text', (tester) async {
+  testWidgets('zoom controls fit narrow screens with large text',
+      (tester) async {
     await pumpViewer(tester, size: const Size(320, 600), scale: 1.5);
     await tester.tap(find.byTooltip('Perbesar PDF'));
     await tester.pumpAndSettle();

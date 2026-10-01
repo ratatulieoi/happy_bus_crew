@@ -24,10 +24,9 @@ class FormScreen extends StatefulWidget {
 class _FormScreenState extends State<FormScreen> {
   final _scroll = ScrollController();
   final _picker = ImagePicker();
-  late final TextEditingController _berangkat;
   late final TextEditingController _jam;
-  late final TextEditingController _kembali;
   late final TextEditingController _polisi;
+  late final TextEditingController _namaTamu;
   late final TextEditingController _pengemudi;
   late final TextEditingController _kernet;
   late final TextEditingController _kmAwal;
@@ -41,8 +40,10 @@ class _FormScreenState extends State<FormScreen> {
   final List<TextEditingController> _extraNames = [];
   final List<TextEditingController> _extraAmounts = [];
   String? _extraError;
-  late final TextEditingController _luarKotaCount;
-  late final TextEditingController _dalamKotaCount;
+  final List<_TripPeriodDraft> _periods = [];
+  late bool _preserveLegacyTripData;
+  List<String> _initialPeriods = [];
+  String? _periodError;
   final List<File> _attachments = [];
   List<String> _initialValues = [];
   List<String> _initialAttachments = [];
@@ -56,14 +57,11 @@ class _FormScreenState extends State<FormScreen> {
   bool get _isEdit => widget.report != null;
   bool get _busy => _saving || _previewing || _picking;
   List<TextEditingController> get _controllers => [
-        _berangkat,
         _jam,
-        _kembali,
         _polisi,
+        _namaTamu,
         _pengemudi,
         _kernet,
-        _luarKotaCount,
-        _dalamKotaCount,
         _kmAwal,
         _kmAkhir,
         _namaCrew,
@@ -79,6 +77,7 @@ class _FormScreenState extends State<FormScreen> {
       !_loading &&
       _loadError == null &&
       (!_same(_initialValues, _controllers.map((c) => c.text).toList()) ||
+          !_same(_initialPeriods, _periodValues) ||
           !_same(
               _initialAttachments, _attachments.map((f) => f.path).toList()));
 
@@ -94,16 +93,16 @@ class _FormScreenState extends State<FormScreen> {
   void initState() {
     super.initState();
     final r = widget.report;
-    _luarKotaCount =
-        TextEditingController(text: r?.luarKotaCount?.toString() ?? '');
-    _dalamKotaCount =
-        TextEditingController(text: r?.dalamKotaCount?.toString() ?? '');
+    _preserveLegacyTripData = r == null || r.tripPeriods == null;
+    for (final period in r?.tripPeriods ?? <TripPeriod>[]) {
+      _periods.add(_TripPeriodDraft(
+          start: period.start, end: period.end, type: period.type));
+    }
     String amount(int? value) =>
         value == null || value == 0 ? '' : formatNumberId(value);
-    _berangkat = TextEditingController(text: r?.hariTglBerangkat ?? '');
     _jam = TextEditingController(text: r?.jamBerangkat ?? '');
-    _kembali = TextEditingController(text: r?.hariTglKembali ?? '');
     _polisi = TextEditingController(text: r?.noPolisi ?? '');
+    _namaTamu = TextEditingController(text: r?.namaTamu ?? '');
     _pengemudi = TextEditingController(text: r?.pengemudi ?? '');
     _kernet = TextEditingController(text: r?.kernet ?? '');
     _kmAwal =
@@ -130,9 +129,33 @@ class _FormScreenState extends State<FormScreen> {
   }
 
   void _changed() {
+    // Every shared controller reports here on each keystroke. The period
+    // rows keep their own controllers off this listener: recomputing the
+    // overlap on every keypress would flash the error while a date is
+    // half-typed, so those fields refresh it through onChanged instead.
     if (mounted && !_loading) {
-      setState(() => _extraError = null);
+      setState(() {
+        _extraError = null;
+      });
     }
+  }
+
+  int _periodFieldSalt = 0;
+
+  Widget _periodDayField(int index, bool isStart) {
+    final period = _periods[index];
+    final label = isStart ? 'Tanggal mulai' : 'Tanggal selesai';
+    return TextFormField(
+      key: ValueKey('${identityHashCode(period)}-$label-$_periodFieldSalt'),
+      initialValue: isStart ? _dayText(period.start) : _dayText(period.end),
+      keyboardType: TextInputType.datetime,
+      decoration: InputDecoration(
+          labelText: label,
+          hintText: 'dd/MM/yyyy',
+          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 20)),
+      onChanged: (value) => _onPeriodDayText(index, isStart, value),
+      onTap: _busy ? null : () => _pickPeriodDay(index, isStart),
+    );
   }
 
   Future<void> _loadInitialData() async {
@@ -159,14 +182,14 @@ class _FormScreenState extends State<FormScreen> {
         ..clear()
         ..addAll(files);
       _initialValues = _controllers.map((c) => c.text).toList();
+      _initialPeriods = _periodValues;
       _initialAttachments = _attachments.map((f) => f.path).toList();
       setState(() => _loading = false);
     } catch (_) {
       if (mounted) {
         setState(() {
           _loading = false;
-          _loadError =
-              'Data bus atau lampiran belum dapat dimuat. Coba lagi sebelum mengubah laporan.';
+          _loadError = 'Data bus atau lampiran gagal dimuat. Coba lagi.';
         });
       }
     }
@@ -177,6 +200,9 @@ class _FormScreenState extends State<FormScreen> {
     for (final c in _controllers) {
       c.removeListener(_changed);
       c.dispose();
+    }
+    for (final period in _periods) {
+      period.dispose();
     }
     _scroll.dispose();
     super.dispose();
@@ -189,8 +215,7 @@ class _FormScreenState extends State<FormScreen> {
           context: context,
           builder: (ctx) => AlertDialog(
                 title: const Text('Keluar tanpa menyimpan?'),
-                content: const Text(
-                    'Perubahan pada laporan ini belum disimpan. Kembali ke formulir untuk melanjutkan.'),
+                content: const Text('Perubahan belum disimpan.'),
                 actions: [
                   TextButton(
                       onPressed: () => Navigator.pop(ctx, false),
@@ -267,9 +292,9 @@ class _FormScreenState extends State<FormScreen> {
                           const SizedBox(height: 6),
                           Text(
                               [
-                                'Isi jadwal, nama crew, dan kilometer bus.',
-                                'Catat uang saku dan rincian pengeluaran.',
-                                'Tambahkan nama pembuat, catatan, dan lampiran.'
+                                'Jadwal, crew, dan kilometer bus.',
+                                'Uang saku dan pengeluaran.',
+                                'Nama pembuat, catatan, dan lampiran.'
                               ][_step],
                               style: const TextStyle(color: AppColors.muted)),
                           const SizedBox(height: 24),
@@ -353,23 +378,12 @@ class _FormScreenState extends State<FormScreen> {
         SectionCard(
             child: Column(children: [
           const SectionHeading(
-              title: 'Bus & jadwal',
-              subtitle: 'Nomor polisi mengikuti bus yang dipilih.',
-              icon: Icons.route_outlined),
+              title: 'Bus & jadwal', icon: Icons.route_outlined),
           _text(_polisi, 'Nomor polisi',
               readOnly: true,
               suffixIcon: const Icon(Icons.lock_outline, size: 18)),
           const SizedBox(height: 16),
-          _tripCountFields(),
-          const SizedBox(height: 16),
-          _dateField(_berangkat, 'Tanggal berangkat'),
-          const SizedBox(height: 16),
-          _dateField(_kembali, 'Tanggal kembali'),
-          if (_dateOrderWarning) ...[
-            const SizedBox(height: 12),
-            _notice(
-                'Tanggal kembali lebih awal dari keberangkatan. Periksa kembali jadwalnya.')
-          ],
+          _text(_namaTamu, 'Nama tamu', hint: 'Nama tamu atau kelompok'),
           const SizedBox(height: 16),
           _text(_jam, 'Jam berangkat',
               hint: '08:00',
@@ -379,6 +393,8 @@ class _FormScreenState extends State<FormScreen> {
                   tooltip: 'Pilih jam berangkat',
                   icon: const Icon(Icons.schedule_rounded, size: 20))),
         ])),
+        const SizedBox(height: 16),
+        _periodFields(),
         const SizedBox(height: 16),
         SectionCard(
             child: Column(children: [
@@ -392,59 +408,287 @@ class _FormScreenState extends State<FormScreen> {
         SectionCard(
             child:
                 Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SectionHeading(
-              title: 'Kilometer',
-              subtitle: 'Isi KM awal dan KM akhir secara manual untuk laporan ini.',
-              icon: Icons.speed_rounded),
+          const SectionHeading(title: 'Kilometer', icon: Icons.speed_rounded),
           AdaptivePair(
               first: _numberField(_kmAwal, 'KM awal', money: false),
               second: _numberField(_kmAkhir, 'KM akhir', money: false)),
         ])),
       ];
 
-  Widget _tripCountFields() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text('Jumlah perjalanan',
-              style: TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          const Text('Opsional. Isi jumlah LK dan DK jika diperlukan.',
-              style: TextStyle(color: AppColors.muted, fontSize: 12)),
-          const SizedBox(height: 16),
-          AdaptivePair(
-            first: _countField(_luarKotaCount, 'Luar Kota (LK)'),
-            second: _countField(_dalamKotaCount, 'Dalam Kota (DK)'),
-          ),
-          if (_isEdit && !widget.report!.hasTripCounts)
-            Padding(
-              padding: const EdgeInsets.only(top: 8),
-              child: Text(
-                  widget.report!.tripType == TripType.unspecified
-                      ? 'Jumlah perjalanan belum dicatat pada laporan lama.'
-                      : 'Data lama: ${widget.report!.tripType.label}. Jumlah perjalanan belum dicatat.',
-                  style: const TextStyle(color: AppColors.muted, fontSize: 12)),
-            ),
-        ],
-      );
+  String get _periodTotals {
+    var lk = 0;
+    var dk = 0;
+    for (final period in _completePeriods) {
+      if (period.type == TripType.luarKota) {
+        lk += period.days;
+      } else {
+        dk += period.days;
+      }
+    }
+    return 'LK $lk hari, DK $dk hari.';
+  }
 
-  Widget _countField(TextEditingController controller, String label) =>
-      TextFormField(
-        controller: controller,
-        keyboardType: TextInputType.number,
-        textInputAction: TextInputAction.next,
-        inputFormatters: [
-          TextInputFormatter.withFunction((oldValue, newValue) =>
-              RegExp(r'^[0-9]*$').hasMatch(newValue.text) ? newValue : oldValue),
-        ],
-        decoration: InputDecoration(labelText: label, hintText: '0'),
-      );
+  static final _spanFormat = DateFormat('EEEE, dd/MM/yyyy', 'id_ID');
+
+  /// The trip span is derived, not typed: the earliest start and latest end
+  /// across the rows. Empty until a first complete row exists.
+  String get _tripSpanText {
+    final start = TripPeriod.spanStart(_completePeriods);
+    final end = TripPeriod.spanEnd(_completePeriods);
+    if (start == null || end == null) return 'Berangkat - Kembali: belum ada.';
+    return 'Berangkat ${_spanFormat.format(start)} - '
+        'Kembali ${_spanFormat.format(end)}.';
+  }
+
+  /// Finished rows earn a small quiet pill (16 hari DK); unfinished rows
+  /// stay plain text so the count is never confused with the row number.
+  Widget _periodTitle(int index) {
+    final period = _periods[index];
+    final label = 'Periode ${index + 1}';
+    final titleStyle = Theme.of(context).textTheme.titleMedium;
+    if (period.start == null || period.end == null || period.type == null) {
+      return Text(label, style: titleStyle);
+    }
+    final days =
+        DateTime.utc(period.end!.year, period.end!.month, period.end!.day)
+                .difference(DateTime.utc(
+                    period.start!.year, period.start!.month, period.start!.day))
+                .inDays +
+            1;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 4,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        Text(label, style: titleStyle),
+        StatusPill(label: '$days hari ${period.type!.shortLabel}'),
+      ],
+    );
+  }
+
+  List<String> get _periodValues => [
+        if (_preserveLegacyTripData) 'legacy' else 'periods',
+        for (final period in _periods)
+          '${period.start?.toIso8601String()}|${period.end?.toIso8601String()}|${period.type?.value}',
+      ];
+
+  List<TripPeriod> get _completePeriods => [
+        for (final period in _periods)
+          if (period.start != null &&
+              period.end != null &&
+              !period.end!.isBefore(period.start!) &&
+              period.type != null)
+            TripPeriod(
+                start: period.start!, end: period.end!, type: period.type!),
+      ];
+
+  /// Empty is allowed for now. Otherwise every row needs its own dates and
+  /// one type, and rows may sit apart but never overlap.
+  bool _validatePeriods() {
+    // Untouched legacy counts stay valid until the crew adds a row.
+    if (_preserveLegacyTripData && _periods.isEmpty) {
+      setState(() => _periodError = null);
+      return true;
+    }
+    for (var i = 0; i < _periods.length; i++) {
+      final period = _periods[i];
+      if (period.start == null || period.end == null) {
+        setState(() => _periodError = 'Periode ${i + 1}: pilih tanggal.');
+        return false;
+      }
+      if (period.end!.isBefore(period.start!)) {
+        setState(() => _periodError = 'Periode ${i + 1}: tanggal terbalik.');
+        return false;
+      }
+      if (period.type == null) {
+        setState(() => _periodError = 'Periode ${i + 1}: pilih LK atau DK.');
+        return false;
+      }
+    }
+    final error = TripPeriod.validateNoOverlap(_completePeriods);
+    setState(() => _periodError = error);
+    return error == null;
+  }
+
+  Widget _periodFields() {
+    final report = widget.report;
+    if (_preserveLegacyTripData && report != null && _periods.isEmpty) {
+      final details = report.hasTripCounts
+          ? 'LK ${report.luarKotaCount} hari, DK ${report.dalamKotaCount} hari.'
+          : report.tripType == TripType.unspecified
+              ? 'Belum dicatat.'
+              : '${report.tripType.label}, jumlah belum dicatat.';
+      return SectionCard(
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        const SectionHeading(
+            title: 'Periode LK/DK', icon: Icons.date_range_outlined),
+        Text(details),
+        const SizedBox(height: 12),
+        OutlinedButton(
+            onPressed: _busy
+                ? null
+                : () => setState(() {
+                      _preserveLegacyTripData = false;
+                    }),
+            child: const Text('Isi periode')),
+      ]));
+    }
+    return SectionCard(
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      SectionHeading(
+          title: 'Periode LK/DK',
+          subtitle: _periods.isEmpty ? 'Belum ada periode.' : _periodTotals,
+          icon: Icons.date_range_outlined),
+      Text(_tripSpanText, style: const TextStyle(color: AppColors.muted)),
+      const SizedBox(height: 12),
+      for (var i = 0; i < _periods.length; i++) ...[
+        Container(
+          key: ObjectKey(_periods[i]),
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+              color: AppColors.canvas, borderRadius: BorderRadius.circular(12)),
+          child:
+              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            _periodTitle(i),
+            const SizedBox(height: 12),
+            AdaptivePair(
+              first: _periodDayField(i, true),
+              second: _periodDayField(i, false),
+            ),
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, runSpacing: 8, children: [
+              for (final type in [TripType.luarKota, TripType.dalamKota])
+                ChoiceChip(
+                    label: Text(type == TripType.luarKota
+                        ? 'Luar Kota (LK)'
+                        : 'Dalam Kota (DK)'),
+                    selected: _periods[i].type == type,
+                    onSelected: _busy
+                        ? null
+                        : (selected) => setState(() {
+                              _periods[i].type = selected ? type : null;
+                              _periodError = TripPeriod.validateNoOverlap(
+                                  _completePeriods);
+                            })),
+            ]),
+            Align(
+              alignment: Alignment.centerRight,
+              child: Tooltip(
+                message: 'Hapus periode ${i + 1}',
+                child: TextButton.icon(
+                    onPressed: _busy ? null : () => _removePeriod(i),
+                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                    label: const Text('Hapus')),
+              ),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 12),
+      ],
+      if (_periodError != null) ...[
+        Text(_periodError!,
+            style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+        const SizedBox(height: 12),
+      ],
+      OutlinedButton.icon(
+        onPressed: _busy ? null : _addPeriod,
+        icon: const Icon(Icons.add_rounded, size: 20),
+        label: const Text('Tambah periode'),
+      ),
+    ]));
+  }
+
+  void _addPeriod() {
+    setState(() {
+      _preserveLegacyTripData = false;
+      _periods.add(_TripPeriodDraft());
+      _periodError = null;
+    });
+  }
+
+  void _removePeriod(int index) {
+    FocusScope.of(context).unfocus();
+    final removed = _periods[index];
+    setState(() {
+      _periods.removeAt(index);
+      _periodError = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      removed.dispose();
+      if (mounted && !_loading) {
+        setState(() {
+          _periodError = TripPeriod.validateNoOverlap(_completePeriods);
+        });
+      }
+    });
+  }
+
+  static final _dayFormat = DateFormat('dd/MM/yyyy', 'id_ID');
+
+  String _dayText(DateTime? day) => day == null ? '' : _dayFormat.format(day);
+
+  void _setPeriodDay(int index, bool isStart, DateTime day) {
+    final period = _periods[index];
+    if (isStart) {
+      period.start = day;
+    } else {
+      period.end = day;
+    }
+    // Remount the row's fields so the fresh ones show the picked day; the
+    // salt in the key below forces new state with the formatted value.
+    _periodFieldSalt++;
+    if (mounted && !_loading) {
+      setState(() {
+        _periodError = TripPeriod.validateNoOverlap(_completePeriods);
+      });
+    }
+  }
+
+  void _onPeriodDayText(int index, bool isStart, String value) {
+    final parsed = _parseDayInput(value);
+    final period = _periods[index];
+    if (isStart) {
+      period.start = parsed;
+    } else {
+      period.end = parsed;
+    }
+    if (mounted && !_loading) {
+      setState(() {
+        _periodError = TripPeriod.validateNoOverlap(_completePeriods);
+      });
+    }
+  }
+
+  DateTime? _parseDayInput(String value) {
+    try {
+      return _dayFormat.parseStrict(value.trim());
+    } on FormatException {
+      return null;
+    }
+  }
+
+  Future<void> _pickPeriodDay(int index, bool isStart) async {
+    final period = _periods[index];
+    final now = DateTime.now();
+    final current = isStart ? period.start : period.end;
+    final picked = await showDatePicker(
+        context: context,
+        initialDate: current ?? now,
+        firstDate: DateTime(2020),
+        lastDate: DateTime(now.year + 10, 12, 31),
+        locale: const Locale('id', 'ID'));
+    if (picked != null && mounted) {
+      _setPeriodDay(index, isStart, picked);
+    }
+  }
 
   List<Widget> _financeFields() => [
         SectionCard(
             child: Column(children: [
           const SectionHeading(
               title: 'Uang diterima',
-              subtitle: 'Uang saku yang diberikan untuk perjalanan.',
+              subtitle: 'Uang saku diterima dari kantor.',
               icon: Icons.account_balance_wallet_outlined),
           _numberField(_uangSaku, 'Uang saku'),
         ])),
@@ -453,7 +697,7 @@ class _FormScreenState extends State<FormScreen> {
             child: Column(children: [
           const SectionHeading(
               title: 'Rincian pengeluaran',
-              subtitle: 'Biarkan kosong jika tidak ada pengeluaran.',
+              subtitle: 'Kosongkan jika tidak ada.',
               icon: Icons.receipt_long_outlined),
           _numberField(_bbm, 'BBM'),
           const SizedBox(height: 16),
@@ -466,8 +710,7 @@ class _FormScreenState extends State<FormScreen> {
             child: Column(children: [
           const SectionHeading(
               title: 'Pembayaran tagihan',
-              subtitle:
-                  'Uang tunai dari klien untuk biaya bus yang dibayarkan kepada crew. Tidak masuk hitungan pengeluaran atau sisa uang saku.',
+              subtitle: 'Titipan pembayaran pelunasan bus dari tamu jika ada.',
               icon: Icons.payments_outlined),
           _numberField(_pembayaranTagihan, 'Pembayaran tagihan'),
         ])),
@@ -480,13 +723,11 @@ class _FormScreenState extends State<FormScreen> {
             child: Column(children: [
           const SectionHeading(
               title: 'Pembuat laporan',
-              subtitle: 'Nama ini dicantumkan pada area tanda tangan PDF.',
+              subtitle: 'Nama untuk tanda tangan PDF.',
               icon: Icons.draw_outlined),
           _text(_namaCrew, 'Nama crew', hint: 'Nama lengkap pembuat laporan'),
           const SizedBox(height: 16),
-          _text(_catatan, 'Catatan tambahan',
-              hint: 'Opsional, misalnya kendala selama perjalanan',
-              maxLines: 3),
+          _text(_catatan, 'Catatan tambahan', hint: 'Opsional', maxLines: 3),
         ])),
         const SizedBox(height: 16),
         SectionCard(
@@ -512,8 +753,7 @@ class _FormScreenState extends State<FormScreen> {
             label: Text(
                 _previewing ? 'Menyiapkan PDF…' : 'Periksa pratinjau PDF')),
         const SizedBox(height: 8),
-        const Text('Pratinjau tidak menyimpan perubahan laporan.',
-            textAlign: TextAlign.center,
+        const Text('Pratinjau tidak menyimpan perubahan.',
             style: TextStyle(color: AppColors.muted, fontSize: 12)),
       ];
 
@@ -551,49 +791,6 @@ class _FormScreenState extends State<FormScreen> {
             suffixText: money ? null : 'km'),
       );
 
-  DateTime? _parseDate(String value) {
-    try {
-      return DateFormat('EEEE, dd/MM/yyyy', 'id_ID').parseStrict(value);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  bool get _dateOrderWarning {
-    final departure = _parseDate(_berangkat.text);
-    final returning = _parseDate(_kembali.text);
-    return departure != null &&
-        returning != null &&
-        returning.isBefore(departure);
-  }
-
-  Widget _dateField(TextEditingController controller, String label) =>
-      TextFormField(
-        controller: controller,
-        readOnly: true,
-        decoration: InputDecoration(
-            labelText: label,
-            hintText: 'Pilih tanggal',
-            suffixIcon: const Icon(Icons.calendar_today_outlined, size: 20)),
-        onTap: () async {
-          final now = DateTime.now();
-          final selected = _parseDate(controller.text) ?? now;
-          final picked = await showDatePicker(
-              context: context,
-              initialDate: selected,
-              firstDate: DateTime(selected.year < 2020 ? selected.year : 2020),
-              lastDate: DateTime(
-                  selected.year > now.year + 10 ? selected.year : now.year + 10,
-                  12,
-                  31),
-              locale: const Locale('id', 'ID'));
-          if (picked != null && mounted) {
-            controller.text =
-                DateFormat('EEEE, dd/MM/yyyy', 'id_ID').format(picked);
-          }
-        },
-      );
-
   Future<void> _pickTime() async {
     final parts = _jam.text.split(':');
     final hour = int.tryParse(parts.first) ?? 8;
@@ -610,16 +807,6 @@ class _FormScreenState extends State<FormScreen> {
           '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
     }
   }
-
-  Widget _notice(String message) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-            color: AppColors.warningSoft,
-            borderRadius: BorderRadius.circular(10)),
-        child: Text(message,
-            style: const TextStyle(color: AppColors.warning, fontSize: 13)),
-      );
 
   Widget _summaryRow(String label, String value) => Wrap(
         spacing: 16,
@@ -659,7 +846,7 @@ class _FormScreenState extends State<FormScreen> {
         Text(
             deficit
                 ? 'Pengeluaran melebihi uang saku.'
-                : 'Dihitung otomatis dari uang saku dan pengeluaran.',
+                : 'Uang saku dikurangi pengeluaran.',
             style: TextStyle(color: color, fontSize: 12)),
       ]),
     );
@@ -725,15 +912,23 @@ class _FormScreenState extends State<FormScreen> {
                                     const Icon(Icons.close_rounded, size: 18))),
                       ])))),
         const SizedBox(height: 16),
-        AdaptivePair(
-            first: OutlinedButton.icon(
+        // Camera capture is unsupported on Linux; gallery stays available.
+        if (!Platform.isLinux)
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
                 onPressed: () => _pickImage(ImageSource.camera),
                 icon: const Icon(Icons.camera_alt_outlined, size: 20),
                 label: const Text('Kamera')),
-            second: OutlinedButton.icon(
-                onPressed: () => _pickImage(ImageSource.gallery),
-                icon: const Icon(Icons.photo_library_outlined, size: 20),
-                label: const Text('Galeri'))),
+          ),
+        if (!Platform.isLinux) const SizedBox(height: 12),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+              onPressed: () => _pickImage(ImageSource.gallery),
+              icon: const Icon(Icons.photo_library_outlined, size: 20),
+              label: const Text('Galeri')),
+        ),
         if (_picking)
           const Padding(
               padding: EdgeInsets.only(top: 12),
@@ -774,8 +969,7 @@ class _FormScreenState extends State<FormScreen> {
         const SizedBox(height: 4),
         const Align(
           alignment: Alignment.centerLeft,
-          child: Text(
-              'Tulis nama dan harga setiap pengeluaran extra. Semua harga dijumlahkan ke total.',
+          child: Text('Nama dan harga pengeluaran tambahan.',
               style: TextStyle(color: AppColors.muted, fontSize: 12)),
         ),
         const SizedBox(height: 12),
@@ -849,6 +1043,10 @@ class _FormScreenState extends State<FormScreen> {
   }
 
   void _nextStep() {
+    if (_step == 0 && !_validatePeriods()) {
+      showAppMessage(context, _periodError!);
+      return;
+    }
     if (_step == 1 && !_validateExtras()) {
       showAppMessage(context, _extraError!);
       return;
@@ -863,18 +1061,16 @@ class _FormScreenState extends State<FormScreen> {
       final amount = parseRupiahInput(_extraAmounts[i].text);
       final row = i + 1;
       if (name.isEmpty && _extraAmounts[i].text.trim().isEmpty) {
-        setState(() => _extraError = 'Extra $row belum diisi. '
-            'Isi nama dan harga, atau hapus barisnya.');
+        setState(() => _extraError = 'Extra $row belum diisi. Isi atau hapus.');
         return false;
       }
       if (name.isEmpty) {
-        setState(() =>
-            _extraError = 'Isi nama untuk extra $row, misalnya parkir.');
+        setState(() => _extraError = 'Isi nama untuk extra $row.');
         return false;
       }
       if (amount <= 0) {
-        setState(() =>
-            _extraError = 'Isi harga untuk "$name" lebih dari Rp 0.');
+        setState(
+            () => _extraError = 'Isi harga untuk "$name" lebih dari Rp 0.');
         return false;
       }
     }
@@ -882,18 +1078,32 @@ class _FormScreenState extends State<FormScreen> {
     return true;
   }
 
-  Report _buildReport() => Report(
-        id: widget.report?.id,
-        tanggalBuat: widget.report?.tanggalBuat ?? DateTime.now(),
-        hariTglBerangkat: _berangkat.text.trim(),
+  /// The span shown on the form is derived; stored dates only matter for
+  /// legacy reports, which keep their values until the crew adds periods.
+  String _derivedSpanLabel(bool isStart, List<TripPeriod> periods) {
+    final day =
+        isStart ? TripPeriod.spanStart(periods) : TripPeriod.spanEnd(periods);
+    if (day == null) return '';
+    return _spanFormat.format(day);
+  }
+
+  Report _buildReport() {
+    final existing = widget.report;
+    final legacy = existing?.tripPeriods == null;
+    if (_preserveLegacyTripData && legacy && existing != null) {
+      return Report(
+        id: existing.id,
+        tanggalBuat: existing.tanggalBuat,
+        hariTglBerangkat: existing.hariTglBerangkat,
         jamBerangkat: _jam.text.trim(),
-        hariTglKembali: _kembali.text.trim(),
+        hariTglKembali: existing.hariTglKembali,
         noPolisi: _polisi.text.trim(),
+        namaTamu: _namaTamu.text.trim(),
         pengemudi: _pengemudi.text.trim(),
         kernet: _kernet.text.trim(),
-        tripType: widget.report?.tripType ?? TripType.unspecified,
-        luarKotaCount: int.tryParse(_luarKotaCount.text),
-        dalamKotaCount: int.tryParse(_dalamKotaCount.text),
+        tripType: existing.tripType,
+        luarKotaCount: existing.luarKotaCount,
+        dalamKotaCount: existing.dalamKotaCount,
         kmAwal: parseRupiahInput(_kmAwal.text),
         kmAkhir: parseRupiahInput(_kmAkhir.text),
         uangSaku: parseRupiahInput(_uangSaku.text),
@@ -909,10 +1119,56 @@ class _FormScreenState extends State<FormScreen> {
                 amount: parseRupiahInput(_extraAmounts[i].text)),
         ],
       );
+    }
+    final Report? saved = existing;
+    final keepSavedEmptyTripData = _preserveLegacyTripData &&
+        saved?.tripPeriods != null &&
+        _periods.isEmpty;
+    final derived = _completePeriods;
+    return Report(
+      id: saved?.id,
+      tanggalBuat: saved?.tanggalBuat ?? DateTime.now(),
+      hariTglBerangkat: _derivedSpanLabel(true, derived),
+      jamBerangkat: _jam.text.trim(),
+      hariTglKembali: _derivedSpanLabel(false, derived),
+      noPolisi: _polisi.text.trim(),
+      namaTamu: _namaTamu.text.trim(),
+      pengemudi: _pengemudi.text.trim(),
+      kernet: _kernet.text.trim(),
+      tripType: keepSavedEmptyTripData && saved != null
+          ? saved.tripType
+          : TripType.unspecified,
+      luarKotaCount:
+          keepSavedEmptyTripData && saved != null ? saved.luarKotaCount : null,
+      dalamKotaCount:
+          keepSavedEmptyTripData && saved != null ? saved.dalamKotaCount : null,
+      resetTripData: _periods.isEmpty && !keepSavedEmptyTripData,
+      tripPeriods: derived,
+      kmAwal: parseRupiahInput(_kmAwal.text),
+      kmAkhir: parseRupiahInput(_kmAkhir.text),
+      uangSaku: parseRupiahInput(_uangSaku.text),
+      bbm: parseRupiahInput(_bbm.text),
+      uangMakan: parseRupiahInput(_uangMakan.text),
+      pembayaranTagihan: parseRupiahInput(_pembayaranTagihan.text),
+      namaCrew: _namaCrew.text.trim(),
+      catatan: _catatan.text.trim(),
+      extras: [
+        for (var i = 0; i < _extraNames.length; i++)
+          ExtraExpense(
+              name: _extraNames[i].text.trim(),
+              amount: parseRupiahInput(_extraAmounts[i].text)),
+      ],
+    );
+  }
 
   Future<void> _onSave() async {
     if (_busy || _loading) return;
     FocusScope.of(context).unfocus();
+    if (!_validatePeriods()) {
+      _goToStep(0);
+      showAppMessage(context, _periodError!);
+      return;
+    }
     if (!_validateExtras()) {
       _goToStep(1);
       showAppMessage(context, _extraError!);
@@ -927,8 +1183,7 @@ class _FormScreenState extends State<FormScreen> {
       if (mounted) Navigator.pop(context, true);
     } catch (_) {
       if (mounted) {
-        showAppMessage(context,
-            'Laporan gagal disimpan. Isian Anda tetap ada, silakan coba lagi.');
+        showAppMessage(context, 'Gagal menyimpan. Isian tetap ada. Coba lagi.');
       }
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -938,6 +1193,11 @@ class _FormScreenState extends State<FormScreen> {
   Future<void> _onPreview() async {
     if (_busy || _loading) return;
     FocusScope.of(context).unfocus();
+    if (!_validatePeriods()) {
+      _goToStep(0);
+      showAppMessage(context, _periodError!);
+      return;
+    }
     if (!_validateExtras()) {
       _goToStep(1);
       showAppMessage(context, _extraError!);
@@ -958,13 +1218,23 @@ class _FormScreenState extends State<FormScreen> {
                   PreviewScreen(report: report, attachmentImages: images)));
     } catch (_) {
       if (mounted) {
-        showAppMessage(context,
-            'Pratinjau belum dapat dibuat. Periksa lampiran lalu coba lagi.');
+        showAppMessage(
+            context, 'Pratinjau gagal. Periksa lampiran dan coba lagi.');
       }
     } finally {
       if (mounted) setState(() => _previewing = false);
     }
   }
+}
+
+class _TripPeriodDraft {
+  DateTime? start;
+  DateTime? end;
+  TripType? type;
+
+  _TripPeriodDraft({this.start, this.end, this.type});
+
+  void dispose() {}
 }
 
 /// Keeps the caret beside the edited digits, including edits in the middle.

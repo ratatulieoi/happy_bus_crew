@@ -20,6 +20,7 @@ void main() {
         jamBerangkat: '',
         hariTglKembali: '',
         noPolisi: 'B 1001 XX',
+        namaTamu: 'Bpk. Hartono',
         pengemudi: 'Budi',
         kernet: '',
         kmAwal: 10,

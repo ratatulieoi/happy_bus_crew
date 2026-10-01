@@ -1,20 +1,8 @@
 import 'dart:convert';
 
-// Unspecified preserves reports created before trip types were recorded.
-enum TripType {
-  unspecified('', '-'),
-  luarKota('luar_kota', 'Luar Kota'),
-  dalamKota('dalam_kota', 'Dalam Kota');
+import 'trip_period.dart';
 
-  const TripType(this.value, this.label);
-  final String value;
-  final String label;
-
-  static TripType fromValue(Object? value) => values.firstWhere(
-        (type) => type.value == value,
-        orElse: () => unspecified,
-      );
-}
+export 'trip_period.dart';
 
 /// Satu baris pengeluaran extra: nama item dan harga rupiah.
 ///
@@ -53,12 +41,29 @@ class Report {
   String jamBerangkat; // "08:00"
   String hariTglKembali; // "Rabu, 03/01/2024"
   String noPolisi; // "B 1234 XX"
+  String namaTamu; // nama tamu, diisi saat input tampering tersedia
   String pengemudi; // nama sopir
   String kernet; // nama kernet/asisten
   // Retained for reports saved before separate trip counts were available.
   TripType tripType;
-  final int? luarKotaCount;
-  final int? dalamKotaCount;
+  final int? _legacyLuarKotaCount;
+  final int? _legacyDalamKotaCount;
+
+  // null retains legacy counts; [] explicitly clears the period breakdown.
+  final List<TripPeriod>? tripPeriods;
+
+  int? get luarKotaCount => _countDays(TripType.luarKota, _legacyLuarKotaCount);
+  int? get dalamKotaCount =>
+      _countDays(TripType.dalamKota, _legacyDalamKotaCount);
+
+  int? _countDays(TripType type, int? legacy) {
+    final periods = tripPeriods;
+    if (periods == null) return legacy;
+    if (periods.isEmpty) return null;
+    return periods
+        .where((period) => period.type == type)
+        .fold<int>(0, (sum, period) => sum + period.days);
+  }
 
   bool get hasTripCounts => luarKotaCount != null && dalamKotaCount != null;
 
@@ -89,6 +94,7 @@ class Report {
     required this.jamBerangkat,
     required this.hariTglKembali,
     required this.noPolisi,
+    required this.namaTamu,
     required this.pengemudi,
     required this.kernet,
     required this.kmAwal,
@@ -100,11 +106,28 @@ class Report {
     required this.namaCrew,
     this.catatan = '',
     this.tripType = TripType.unspecified,
-    this.luarKotaCount,
-    this.dalamKotaCount,
+    int? luarKotaCount,
+    int? dalamKotaCount,
+    List<TripPeriod>? tripPeriods,
+    bool resetTripData = false,
     List<ExtraExpense>? extras,
   })  : assert(luarKotaCount == null || luarKotaCount >= 0),
         assert(dalamKotaCount == null || dalamKotaCount >= 0),
+        _legacyLuarKotaCount = resetTripData
+            ? null
+            : tripPeriods == null
+                ? luarKotaCount
+                : null,
+        _legacyDalamKotaCount = resetTripData
+            ? null
+            : tripPeriods == null
+                ? dalamKotaCount
+                : null,
+        tripPeriods = resetTripData
+            ? const <TripPeriod>[]
+            : tripPeriods == null
+                ? null
+                : List.unmodifiable(tripPeriods),
         tanggalBuat = tanggalBuat ?? DateTime.now(),
         extras = List.unmodifiable(extras ?? const <ExtraExpense>[]);
 
@@ -130,11 +153,15 @@ class Report {
       'jam_berangkat': jamBerangkat,
       'hari_tgl_kembali': hariTglKembali,
       'no_polisi': noPolisi,
+      'nama_tamu': namaTamu,
       'pengemudi': pengemudi,
       'kernet': kernet,
       'trip_type': tripType.value,
       'luar_kota_count': luarKotaCount,
       'dalam_kota_count': dalamKotaCount,
+      'trip_periods': tripPeriods == null
+          ? null
+          : jsonEncode([for (final period in tripPeriods!) period.toMap()]),
       'km_awal': kmAwal,
       'km_akhir': kmAkhir,
       'uang_saku': uangSaku,
@@ -157,11 +184,13 @@ class Report {
       jamBerangkat: map['jam_berangkat'] as String? ?? '',
       hariTglKembali: map['hari_tgl_kembali'] as String? ?? '',
       noPolisi: map['no_polisi'] as String? ?? '',
+      namaTamu: map['nama_tamu'] as String? ?? '',
       pengemudi: map['pengemudi'] as String? ?? '',
       kernet: map['kernet'] as String? ?? '',
       tripType: TripType.fromValue(map['trip_type']),
       luarKotaCount: map['luar_kota_count'] as int?,
       dalamKotaCount: map['dalam_kota_count'] as int?,
+      tripPeriods: _periodsFromMap(map['trip_periods']),
       kmAwal: map['km_awal'] as int? ?? 0,
       kmAkhir: map['km_akhir'] as int? ?? 0,
       uangSaku: map['uang_saku'] as int? ?? 0,
@@ -172,6 +201,27 @@ class Report {
       namaCrew: map['nama_crew'] as String? ?? '',
       catatan: map['catatan'] as String? ?? '',
     );
+  }
+
+  static List<TripPeriod>? _periodsFromMap(Object? details) {
+    // Null preserves legacy count fields; '[]' explicitly means no periods.
+    if (details == null) return null;
+    if (details is! String) return null;
+    try {
+      final decoded = jsonDecode(details);
+      if (decoded is! List) return null;
+      final periods = <TripPeriod>[];
+      for (final entry in decoded) {
+        if (entry is! Map<String, dynamic>) {
+          throw const FormatException('Invalid trip period');
+        }
+        periods.add(TripPeriod.fromMap(entry));
+      }
+      return periods;
+    } on FormatException {
+      // Keep stored totals rather than partially accepting corrupt details.
+      return null;
+    }
   }
 
   /// Read named extras, or preserve a legacy total as an 'Extra lama' item.
@@ -209,11 +259,16 @@ class Report {
     String? jamBerangkat,
     String? hariTglKembali,
     String? noPolisi,
+    String? namaTamu,
     String? pengemudi,
     String? kernet,
     TripType? tripType,
+    // Null only preserves existing values; call copyWith with tripPeriods
+    // to keep, clear, or replace computed counts.
     int? luarKotaCount,
     int? dalamKotaCount,
+    List<TripPeriod>? tripPeriods,
+    bool resetTripData = false,
     int? kmAwal,
     int? kmAkhir,
     int? uangSaku,
@@ -231,11 +286,14 @@ class Report {
       jamBerangkat: jamBerangkat ?? this.jamBerangkat,
       hariTglKembali: hariTglKembali ?? this.hariTglKembali,
       noPolisi: noPolisi ?? this.noPolisi,
+      namaTamu: namaTamu ?? this.namaTamu,
       pengemudi: pengemudi ?? this.pengemudi,
       kernet: kernet ?? this.kernet,
       tripType: tripType ?? this.tripType,
-      luarKotaCount: luarKotaCount ?? this.luarKotaCount,
-      dalamKotaCount: dalamKotaCount ?? this.dalamKotaCount,
+      luarKotaCount: resetTripData ? null : luarKotaCount ?? this.luarKotaCount,
+      dalamKotaCount:
+          resetTripData ? null : dalamKotaCount ?? this.dalamKotaCount,
+      tripPeriods: resetTripData ? [] : tripPeriods ?? this.tripPeriods,
       kmAwal: kmAwal ?? this.kmAwal,
       kmAkhir: kmAkhir ?? this.kmAkhir,
       uangSaku: uangSaku ?? this.uangSaku,

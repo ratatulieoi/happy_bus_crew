@@ -20,6 +20,10 @@ android/key.properties
 **/android/**/*.jks
 *.iml
 
+# Python bytecode
+__pycache__/
+*.py[cod]
+
 # IDE
 .idea/
 .vscode/

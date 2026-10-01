@@ -110,13 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _busNameForPlate(String plate) {
-    final clean = plate.trim().toUpperCase();
-    for (final bus in _buses) {
-      if (bus.plate.trim().toUpperCase() == clean) return bus.name;
-    }
-    return '';
-  }
+  String _busNameForPlate(String plate) => busNameForPlate(_buses, plate);
 
   List<Report> get _filteredReports {
     final query = _search.text.trim().toLowerCase();
@@ -140,7 +134,12 @@ class _HomeScreenState extends State<HomeScreen> {
       appBar: AppBar(
         toolbarHeight: 76,
         title: Image.asset('assets/logo.png',
-            width: 154, semanticLabel: 'Happy Group'),
+            width: 154,
+            semanticLabel: 'Happy Group',
+            // A failed asset load must not leave a blank app bar.
+            errorBuilder: (context, error, stackTrace) => const Text(
+                'Happy Group',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
         actions: [
           IconButton(
               onPressed: _loading ? null : _chooseBus,
@@ -342,9 +341,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _reportCard(Report report) {
     final deficit = report.sisa < 0;
     final busName = _busNameForPlate(report.noPolisi);
-    final driver = report.pengemudi.isEmpty
-        ? 'Pengemudi belum diisi'
-        : report.pengemudi;
+    final driver =
+        report.pengemudi.isEmpty ? 'Pengemudi belum diisi' : report.pengemudi;
     return Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(
