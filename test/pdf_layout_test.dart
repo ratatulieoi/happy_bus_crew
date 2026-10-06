@@ -1,5 +1,3 @@
-import 'dart:typed_data';
-
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:happy_bus_crew/models/report.dart';
@@ -92,6 +90,49 @@ void main() {
     expect(text, contains('No. Polisi B 1001 XX'));
     expect(text, contains('Pengemudi Budi'));
     expect(text, contains('Kernet Agus'));
+  });
+
+  test('guest allowance prints after the summary and before trip notes',
+      () async {
+    final doc = await ReportPdfBuilder.build(baseReport().copyWith(
+      hasGuestAllowance: true,
+      guestUangSaku: 100000,
+      guestTol: 10000,
+      guestPenyeberangan: 20000,
+      guestParkir: 5000,
+      guestExtras: const [ExtraExpense(name: 'Bagasi', amount: 3000)],
+      guestCatatan: 'Catatan khusus tamu',
+    ));
+    final text = normalizePdfText((await pdfPageText(doc)).join(' '));
+    final summary = text.indexOf('Ringkasan');
+    final guest = text.indexOf('Uang Saku Tamu Bpk. Hartono');
+    final note = text.indexOf('Catatan perjalanan');
+
+    expect(summary, greaterThanOrEqualTo(0));
+    expect(guest, greaterThan(summary));
+    expect(note, greaterThan(guest));
+    expect(text, contains('Tol 10.000'));
+    expect(text, contains('Penyeberangan 20.000'));
+    expect(text, contains('Parkir 5.000'));
+    expect(text, contains('Bagasi 3.000'));
+    expect(text, contains('Total Pengeluaran Tamu 38.000'));
+    expect(text, contains('SISA TAMU Rp 62.000'));
+    expect(text, contains('Catatan khusus tamu'));
+  });
+
+  test('guest allowance block is hidden unless enabled', () async {
+    final doc = await ReportPdfBuilder.build(baseReport().copyWith(
+      hasGuestAllowance: false,
+      guestUangSaku: 100000,
+      guestTol: 10000,
+      guestCatatan: 'Catatan khusus tamu',
+    ));
+    final text = normalizePdfText((await pdfPageText(doc)).join(' '));
+
+    expect(text, isNot(contains('Uang Saku Tamu')));
+    expect(text, isNot(contains('Total Pengeluaran Tamu')));
+    expect(text, isNot(contains('SISA TAMU')));
+    expect(text, isNot(contains('Catatan khusus tamu')));
   });
 
   test('bus name and guest name join the band only when recorded', () async {

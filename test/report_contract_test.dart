@@ -49,6 +49,97 @@ void main() {
     expect(changed.catatan, 'Diubah');
   });
 
+  test('guest allowance fields round-trip and copy independently', () {
+    final original = report().copyWith(
+      hasGuestAllowance: true,
+      guestUangSaku: 250000,
+      guestTol: 15000,
+      guestPenyeberangan: 25000,
+      guestParkir: 10000,
+      guestExtras: const [ExtraExpense(name: 'Bagasi', amount: 5000)],
+      guestCatatan: 'Titipan tamu',
+    );
+    final restored = Report.fromMap(original.toMap());
+
+    expect(restored.toMap(), original.toMap());
+    expect(restored.hasGuestAllowance, isTrue);
+    expect(restored.guestUangSaku, 250000);
+    expect(restored.guestTol, 15000);
+    expect(restored.guestPenyeberangan, 25000);
+    expect(restored.guestParkir, 10000);
+    expect(restored.guestExtras.single.name, 'Bagasi');
+    expect(restored.guestExtras.single.amount, 5000);
+    expect(restored.guestCatatan, 'Titipan tamu');
+
+    final changed = restored.copyWith(
+      guestTol: 20000,
+      guestCatatan: 'Catatan baru',
+    );
+    expect(changed.guestTol, 20000);
+    expect(changed.guestCatatan, 'Catatan baru');
+    expect(changed.guestUangSaku, original.guestUangSaku);
+    expect(changed.guestPenyeberangan, original.guestPenyeberangan);
+    expect(changed.guestParkir, original.guestParkir);
+    expect(changed.guestExtras.map((item) => item.name), ['Bagasi']);
+    expect(changed.guestExtras.map((item) => item.amount), [5000]);
+    expect(changed.hasGuestAllowance, isTrue);
+  });
+
+  test('guest totals include guest costs only', () {
+    final r = report().copyWith(
+      hasGuestAllowance: true,
+      guestUangSaku: 100000,
+      guestTol: 10000,
+      guestPenyeberangan: 20000,
+      guestParkir: 5000,
+      guestExtras: const [
+        ExtraExpense(name: 'Bagasi', amount: 3000),
+        ExtraExpense(name: 'Air minum', amount: 2000),
+      ],
+    );
+
+    expect(r.guestExtraTotal, 5000);
+    expect(r.guestTotalPengeluaran, 40000);
+    expect(r.guestSisa, 60000);
+    expect(r.totalPengeluaran, 750000);
+    expect(r.sisa, 250000);
+    expect(r.copyWith(guestUangSaku: 1000).totalPengeluaran, 750000);
+    expect(r.copyWith(guestTol: 0).sisa, 250000);
+  });
+
+  test('hasGuestData reflects the toggle and every guest field', () {
+    expect(report().hasGuestData, isFalse);
+    expect(report().copyWith(hasGuestAllowance: true).hasGuestData, isTrue);
+    expect(report().copyWith(guestUangSaku: 1).hasGuestData, isTrue);
+    expect(report().copyWith(guestTol: 1).hasGuestData, isTrue);
+    expect(report().copyWith(guestPenyeberangan: 1).hasGuestData, isTrue);
+    expect(report().copyWith(guestParkir: 1).hasGuestData, isTrue);
+    expect(
+        report().copyWith(guestExtras: const [
+          ExtraExpense(name: 'Bagasi', amount: 0)
+        ]).hasGuestData,
+        isTrue);
+    expect(report().copyWith(guestCatatan: 'Catatan').hasGuestData, isTrue);
+    expect(
+        report()
+            .copyWith(hasGuestAllowance: false, guestUangSaku: 1)
+            .hasGuestData,
+        isTrue);
+  });
+
+  test('malformed guest extra details fall back to an empty list', () {
+    for (final details in [
+      'not json',
+      '{}',
+      '[{"name":5,"amount":20000}]',
+      '[{"name":"Bagasi","amount":"20000"}]',
+      '[{"name":"Bagasi","amount":20000},null]',
+    ]) {
+      expect(Report.fromMap({'guest_extra_details': details}).guestExtras,
+          isEmpty);
+    }
+  });
+
   test('trip types round-trip, copy and preserve unspecified legacy reports',
       () {
     for (final type in TripType.values) {

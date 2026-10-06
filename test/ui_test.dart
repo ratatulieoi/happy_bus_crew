@@ -120,7 +120,7 @@ void main() {
           final values = args['arguments'] as List? ?? [];
           if (sql.contains('PRAGMA user_version')) {
             return [
-              {'user_version': 12}
+              {'user_version': 13}
             ];
           }
           if (sql.contains('FROM settings')) {
@@ -357,6 +357,17 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> fillGuestExtra(
+      WidgetTester tester, String name, String amount) async {
+    final nameField = find.widgetWithText(TextFormField, 'Nama extra tamu 1');
+    final priceField = find.widgetWithText(TextFormField, 'Harga extra tamu 1');
+    await reveal(tester, nameField);
+    await tester.enterText(nameField, name);
+    await reveal(tester, priceField);
+    await tester.enterText(priceField, amount);
+    await tester.pumpAndSettle();
+  }
+
   Future<void> capture(WidgetTester tester, String name) async {
     final directory = Platform.environment['UI_TEST_SCREENSHOT_DIR'];
     if (directory == null) return;
@@ -492,6 +503,142 @@ void main() {
     await tester.tap(find.text('Lanjut mengisi'));
     await tester.pumpAndSettle();
     expect(find.byType(FormScreen), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets(
+      'guest allowance toggle matches input fill and saves guest columns',
+      (tester) async {
+    await pumpScreen(tester, const HomeScreen());
+    await tester.tap(find.text('Buat laporan baru'));
+    await tester.pumpAndSettle();
+
+    await reveal(tester, find.text('Ada uang saku tamu'));
+    final toggle = find
+        .ancestor(
+            of: find.text('Ada uang saku tamu'),
+            matching: find.byType(GestureDetector))
+        .first;
+    final track = find
+        .descendant(of: toggle, matching: find.byType(AnimatedContainer))
+        .first;
+    final trackWidget = tester.widget<AnimatedContainer>(track);
+    expect(trackWidget.decoration, isA<BoxDecoration>());
+    expect((trackWidget.decoration! as BoxDecoration).color,
+        buildAppTheme().inputDecorationTheme.fillColor);
+    expect((trackWidget.decoration! as BoxDecoration).border, isA<Border>());
+    await tester.tap(find.text('Ada uang saku tamu'));
+    await tester.pumpAndSettle();
+    await reveal(tester, find.widgetWithText(ChoiceChip, '3. Keuangan Tamu'));
+    expect(find.text('3. Keuangan Tamu'), findsOneWidget);
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    for (final label in [
+      'Uang saku diterima',
+      'Tol',
+      'Penyeberangan',
+      'Parkir',
+      'Catatan tamu',
+    ]) {
+      await reveal(tester, find.widgetWithText(TextFormField, label));
+    }
+
+    for (final entry in {
+      'Uang saku diterima': '100000',
+      'Tol': '10000',
+      'Penyeberangan': '20000',
+      'Parkir': '5000',
+    }.entries) {
+      final field = find.widgetWithText(TextFormField, entry.key);
+      await reveal(tester, field);
+      await tester.enterText(field, entry.value);
+    }
+    final note = find.widgetWithText(TextFormField, 'Catatan tamu');
+    await reveal(tester, note);
+    await tester.enterText(note, 'Titipan tamu');
+    await reveal(tester, find.text('Tambah Extra tamu'));
+    await tester.tap(find.text('Tambah Extra tamu'));
+    await tester.pumpAndSettle();
+    await fillGuestExtra(tester, 'Bagasi', '3000');
+
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Simpan laporan'));
+    await tester.pumpAndSettle();
+
+    expect(savedReport, isNotNull);
+    expect(savedReport!['has_guest_allowance'], 1);
+    expect(savedReport!['guest_uang_saku'], 100000);
+    expect(savedReport!['guest_tol'], 10000);
+    expect(savedReport!['guest_penyeberangan'], 20000);
+    expect(savedReport!['guest_parkir'], 5000);
+    expect(savedReport!['guest_extra_details'],
+        '[{"name":"Bagasi","amount":3000}]');
+    expect(savedReport!['guest_catatan'], 'Titipan tamu');
+  });
+
+  testWidgets('blank guest extra blocks the next step', (tester) async {
+    await pumpScreen(tester, const FormScreen());
+    await reveal(tester, find.text('Ada uang saku tamu'));
+    await tester.tap(find.text('Ada uang saku tamu'));
+    await tester.pumpAndSettle();
+    await reveal(tester, find.text('LANGKAH 1 DARI 4'));
+    expect(find.text('LANGKAH 1 DARI 4'), findsOneWidget);
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    expect(find.text('3. Keuangan Tamu'), findsOneWidget);
+
+    await reveal(tester, find.text('Tambah Extra tamu'));
+    await tester.tap(find.text('Tambah Extra tamu'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+
+    expect(
+        find.text('Extra tamu 1 belum diisi. Isi atau hapus.'), findsWidgets);
+    await reveal(tester, find.text('LANGKAH 3 DARI 4'));
+    expect(find.text('LANGKAH 3 DARI 4'), findsOneWidget);
+    expect(find.text('Simpan laporan'), findsNothing);
+    expect(find.text('Lengkapi laporan'), findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('turning guest allowance off retains values but hides preview',
+      (tester) async {
+    final saved = fixture().copyWith(
+      hasGuestAllowance: true,
+      guestUangSaku: 100000,
+      guestTol: 10000,
+      guestCatatan: 'Titipan tamu',
+    );
+    await pumpScreen(tester, FormScreen(report: saved));
+    await reveal(tester, find.text('Ada uang saku tamu'));
+    await tester.tap(find.text('Ada uang saku tamu'));
+    await tester.pumpAndSettle();
+    expect(find.widgetWithText(ChoiceChip, '3. Keuangan Tamu'), findsNothing);
+    await reveal(tester, find.text('3. Lampiran'));
+    expect(find.text('3. Lampiran'), findsOneWidget);
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    expect(find.text('Uang saku diterima'), findsNothing);
+    expect(find.text('Pengeluaran tamu Bpk. Hartono'), findsNothing);
+
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
+    await reveal(tester, find.text('Periksa pratinjau PDF'));
+    await tester.tap(find.text('Periksa pratinjau PDF'));
+    await tester.pump();
+    await tester.pump(const Duration(seconds: 1));
+
+    final preview = tester.widget<PreviewScreen>(find.byType(PreviewScreen));
+    expect(preview.report.hasGuestAllowance, isFalse);
+    expect(preview.report.guestUangSaku, 100000);
+    expect(preview.report.guestTol, 10000);
+    expect(preview.report.guestCatatan, 'Titipan tamu');
     expect(tester.takeException(), isNull);
   });
 
@@ -695,6 +842,34 @@ void main() {
     expect(restored.tripPeriods, hasLength(2));
     expect(restored.luarKotaCount, 1);
     expect(restored.dalamKotaCount, 1);
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('langkah pills animate selection without a checklist icon',
+      (tester) async {
+    await pumpScreen(tester, const FormScreen());
+    final first = find.widgetWithText(ChoiceChip, '1. Perjalanan');
+    await reveal(tester, first);
+    final selected = tester.widget<ChoiceChip>(first);
+    expect(selected.selected, isTrue);
+    expect(selected.showCheckmark, isFalse);
+    expect(
+        find.descendant(of: first, matching: find.byIcon(Icons.check_rounded)),
+        findsNothing);
+    expect(find.ancestor(of: first, matching: find.byType(AnimatedScale)),
+        findsOneWidget);
+    final second = find.widgetWithText(ChoiceChip, '2. Keuangan');
+    await reveal(tester, second);
+    await tester.tap(second);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 200));
+    expect(tester.widget<ChoiceChip>(second).selected, isTrue);
+    expect(
+        find.descendant(of: second, matching: find.byIcon(Icons.check_rounded)),
+        findsNothing);
+    final selectionAnimation = tester.widget<AnimatedScale>(
+        find.ancestor(of: second, matching: find.byType(AnimatedScale)));
+    expect(selectionAnimation.scale, 1.02);
     expect(tester.takeException(), isNull);
   });
 

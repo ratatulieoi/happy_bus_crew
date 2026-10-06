@@ -17,7 +17,7 @@ class DatabaseHelper {
     final dbPath = await getDatabasesPath();
     _db = await openDatabase(
       p.join(dbPath, 'happy_bus.db'),
-      version: 12,
+      version: 13,
       onCreate: (db, v) async {
         await _createBusTable(db);
         await db.execute('''
@@ -44,7 +44,14 @@ class DatabaseHelper {
             extra              INTEGER NOT NULL DEFAULT 0,
             extra_details      TEXT    NOT NULL DEFAULT '[]',
             nama_crew          TEXT    NOT NULL DEFAULT '',
-            catatan            TEXT    NOT NULL DEFAULT ''
+            catatan            TEXT    NOT NULL DEFAULT '',
+            has_guest_allowance INTEGER NOT NULL DEFAULT 0,
+            guest_uang_saku    INTEGER NOT NULL DEFAULT 0,
+            guest_tol          INTEGER NOT NULL DEFAULT 0,
+            guest_penyeberangan INTEGER NOT NULL DEFAULT 0,
+            guest_parkir       INTEGER NOT NULL DEFAULT 0,
+            guest_extra_details TEXT   NOT NULL DEFAULT '[]',
+            guest_catatan      TEXT    NOT NULL DEFAULT ''
           )
         ''');
         await db.execute('''
@@ -142,6 +149,22 @@ class DatabaseHelper {
         if (oldVersion < 12) {
           await db.execute(
               "ALTER TABLE reports ADD COLUMN nama_tamu TEXT NOT NULL DEFAULT ''");
+        }
+        if (oldVersion < 13) {
+          await db.execute(
+              'ALTER TABLE reports ADD COLUMN has_guest_allowance INTEGER NOT NULL DEFAULT 0');
+          await db.execute(
+              'ALTER TABLE reports ADD COLUMN guest_uang_saku INTEGER NOT NULL DEFAULT 0');
+          await db.execute(
+              'ALTER TABLE reports ADD COLUMN guest_tol INTEGER NOT NULL DEFAULT 0');
+          await db.execute(
+              'ALTER TABLE reports ADD COLUMN guest_penyeberangan INTEGER NOT NULL DEFAULT 0');
+          await db.execute(
+              'ALTER TABLE reports ADD COLUMN guest_parkir INTEGER NOT NULL DEFAULT 0');
+          await db.execute(
+              "ALTER TABLE reports ADD COLUMN guest_extra_details TEXT NOT NULL DEFAULT '[]'");
+          await db.execute(
+              "ALTER TABLE reports ADD COLUMN guest_catatan TEXT NOT NULL DEFAULT ''");
         }
       },
     );

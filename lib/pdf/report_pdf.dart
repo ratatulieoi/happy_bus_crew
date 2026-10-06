@@ -98,6 +98,10 @@ class ReportPdfBuilder {
           pw.SizedBox(height: 12),
           _buildSection('Ringkasan'),
           _buildBalance(r),
+          if (r.hasGuestAllowance) ...[
+            pw.SizedBox(height: 12),
+            _buildGuestBlock(r),
+          ],
           if (r.catatan.isNotEmpty) ...[
             pw.SizedBox(height: 12),
             _buildSection('Catatan'),
@@ -470,6 +474,79 @@ class ReportPdfBuilder {
                 style: _tableBold, align: pw.TextAlign.right),
           ],
         ),
+      ],
+    );
+  }
+
+  static pw.Widget _buildGuestBlock(Report r) {
+    final guestName = r.namaTamu.trim();
+    final guestSisa = r.guestSisa;
+
+    return pw.Column(
+      crossAxisAlignment: pw.CrossAxisAlignment.start,
+      children: [
+        _buildSection(
+          guestName.isEmpty ? 'Uang Saku Tamu' : 'Uang Saku Tamu $guestName',
+        ),
+        pw.Table(
+          columnWidths: const {
+            0: pw.FixedColumnWidth(22),
+            1: pw.FlexColumnWidth(5),
+            2: pw.FlexColumnWidth(2),
+          },
+          children: [
+            pw.TableRow(
+              repeat: true,
+              decoration: _rule(0.8, _hairline, top: true),
+              children: [
+                _cell('No', style: _head),
+                _cell('Keterangan', style: _head),
+                _cell('Jumlah', style: _head, align: pw.TextAlign.right),
+              ],
+            ),
+            _expenseRow('1', 'Tol', r.guestTol),
+            _expenseRow('2', 'Penyeberangan', r.guestPenyeberangan),
+            _expenseRow('3', 'Parkir', r.guestParkir),
+            for (int i = 0; i < r.guestExtras.length; i++)
+              _expenseRow(
+                '${i + 4}',
+                r.guestExtras[i].name.trim().isEmpty
+                    ? 'Extra lama'
+                    : r.guestExtras[i].name.trim(),
+                r.guestExtras[i].amount,
+              ),
+            pw.TableRow(
+              decoration: _rule(0.9, _ink, top: true),
+              children: [
+                _cell(''),
+                _cell('Total Pengeluaran Tamu', style: _tableBold),
+                _cell(formatNumberId(r.guestTotalPengeluaran),
+                    style: _tableBold, align: pw.TextAlign.right),
+              ],
+            ),
+          ],
+        ),
+        pw.SizedBox(height: 8),
+        _balanceRow('Uang Saku Tamu', formatRupiah(r.guestUangSaku)),
+        pw.SizedBox(height: 5),
+        pw.Row(
+          mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+          crossAxisAlignment: pw.CrossAxisAlignment.end,
+          children: [
+            pw.Text(
+              guestSisa >= 0 ? 'SISA TAMU' : 'DEFISIT TAMU',
+              style: _balanceLabel,
+            ),
+            pw.Text(
+              formatRupiah(guestSisa),
+              style: guestSisa >= 0 ? _moneyStrong : _moneyDanger,
+            ),
+          ],
+        ),
+        if (r.guestCatatan.isNotEmpty) ...[
+          pw.SizedBox(height: 8),
+          _buildNote(r.guestCatatan),
+        ],
       ],
     );
   }

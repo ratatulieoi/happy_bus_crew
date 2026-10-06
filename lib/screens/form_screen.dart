@@ -37,9 +37,18 @@ class _FormScreenState extends State<FormScreen> {
   late final TextEditingController _bbm;
   late final TextEditingController _uangMakan;
   late final TextEditingController _pembayaranTagihan;
+  late final TextEditingController _guestUangSaku;
+  late final TextEditingController _guestTol;
+  late final TextEditingController _guestPenyeberangan;
+  late final TextEditingController _guestParkir;
+  late final TextEditingController _guestCatatan;
   final List<TextEditingController> _extraNames = [];
   final List<TextEditingController> _extraAmounts = [];
+  final List<TextEditingController> _guestExtraNames = [];
+  final List<TextEditingController> _guestExtraAmounts = [];
   String? _extraError;
+  String? _guestExtraError;
+  late bool _hasGuest;
   final List<_TripPeriodDraft> _periods = [];
   late bool _preserveLegacyTripData;
   List<String> _initialPeriods = [];
@@ -55,7 +64,16 @@ class _FormScreenState extends State<FormScreen> {
   String? _loadError;
   int _step = 0;
   bool get _isEdit => widget.report != null;
+  List<String> get _stepLabels => _hasGuest
+      ? ['Perjalanan', 'Keuangan', 'Keuangan Tamu', 'Lampiran']
+      : ['Perjalanan', 'Keuangan', 'Lampiran'];
+  int get _stepCount => _stepLabels.length;
+  int get _completionStep => _stepCount - 1;
   bool get _busy => _saving || _previewing || _picking;
+  List<String> get _currentValues => [
+        ..._controllers.map((c) => c.text),
+        _hasGuest.toString(),
+      ];
   List<TextEditingController> get _controllers => [
         _jam,
         _polisi,
@@ -72,11 +90,18 @@ class _FormScreenState extends State<FormScreen> {
         _pembayaranTagihan,
         ..._extraNames,
         ..._extraAmounts,
+        _guestUangSaku,
+        _guestTol,
+        _guestPenyeberangan,
+        _guestParkir,
+        _guestCatatan,
+        ..._guestExtraNames,
+        ..._guestExtraAmounts,
       ];
   bool get _dirty =>
       !_loading &&
       _loadError == null &&
-      (!_same(_initialValues, _controllers.map((c) => c.text).toList()) ||
+      (!_same(_initialValues, _currentValues) ||
           !_same(_initialPeriods, _periodValues) ||
           !_same(
               _initialAttachments, _attachments.map((f) => f.path).toList()));
@@ -94,6 +119,7 @@ class _FormScreenState extends State<FormScreen> {
     super.initState();
     final r = widget.report;
     _preserveLegacyTripData = r == null || r.tripPeriods == null;
+    _hasGuest = r?.hasGuestData ?? false;
     for (final period in r?.tripPeriods ?? <TripPeriod>[]) {
       _periods.add(_TripPeriodDraft(
           start: period.start, end: period.end, type: period.type));
@@ -116,10 +142,21 @@ class _FormScreenState extends State<FormScreen> {
     _uangMakan = TextEditingController(text: amount(r?.uangMakan));
     _pembayaranTagihan =
         TextEditingController(text: amount(r?.pembayaranTagihan));
+    _guestUangSaku = TextEditingController(text: amount(r?.guestUangSaku));
+    _guestTol = TextEditingController(text: amount(r?.guestTol));
+    _guestPenyeberangan =
+        TextEditingController(text: amount(r?.guestPenyeberangan));
+    _guestParkir = TextEditingController(text: amount(r?.guestParkir));
+    _guestCatatan = TextEditingController(text: r?.guestCatatan ?? '');
     if (r != null) {
       for (final item in r.extras) {
         _extraNames.add(TextEditingController(text: item.name));
         _extraAmounts.add(TextEditingController(text: amount(item.amount)));
+      }
+      for (final item in r.guestExtras) {
+        _guestExtraNames.add(TextEditingController(text: item.name));
+        _guestExtraAmounts
+            .add(TextEditingController(text: amount(item.amount)));
       }
     }
     for (final c in _controllers) {
@@ -136,6 +173,7 @@ class _FormScreenState extends State<FormScreen> {
     if (mounted && !_loading) {
       setState(() {
         _extraError = null;
+        _guestExtraError = null;
       });
     }
   }
@@ -181,7 +219,7 @@ class _FormScreenState extends State<FormScreen> {
       _attachments
         ..clear()
         ..addAll(files);
-      _initialValues = _controllers.map((c) => c.text).toList();
+      _initialValues = _currentValues;
       _initialPeriods = _periodValues;
       _initialAttachments = _attachments.map((f) => f.path).toList();
       setState(() => _loading = false);
@@ -285,6 +323,7 @@ class _FormScreenState extends State<FormScreen> {
                               [
                                 'Detail perjalanan',
                                 'Keuangan perjalanan',
+                                if (_hasGuest) 'Keuangan tamu',
                                 'Lengkapi laporan'
                               ][_step],
                               style:
@@ -294,20 +333,22 @@ class _FormScreenState extends State<FormScreen> {
                               [
                                 'Jadwal, crew, dan kilometer bus.',
                                 'Uang saku dan pengeluaran.',
+                                if (_hasGuest) 'Uang saku tamu terpisah.',
                                 'Nama pembuat, catatan, dan lampiran.'
                               ][_step],
                               style: const TextStyle(color: AppColors.muted)),
                           const SizedBox(height: 24),
                           if (_step == 0) ..._tripFields(),
                           if (_step == 1) ..._financeFields(),
-                          if (_step == 2) ..._completionFields(),
+                          if (_hasGuest && _step == 2) ..._guestFinanceFields(),
+                          if (_step == _completionStep) ..._completionFields(),
                         ],
                       ))),
           bottomNavigationBar: _loading || _loadError != null
               ? null
               : BottomActionBar(
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  if (_step == 2) ...[
+                  if (_step == _completionStep) ...[
                     const Text('Laporan disimpan di perangkat ini.',
                         style: TextStyle(color: AppColors.muted, fontSize: 12)),
                     const SizedBox(height: 10),
@@ -323,7 +364,7 @@ class _FormScreenState extends State<FormScreen> {
                         child: FilledButton.icon(
                       onPressed: _busy
                           ? null
-                          : _step < 2
+                          : _step < _completionStep
                               ? _nextStep
                               : _onSave,
                       icon: _saving
@@ -332,13 +373,13 @@ class _FormScreenState extends State<FormScreen> {
                               height: 18,
                               child: CircularProgressIndicator(strokeWidth: 2))
                           : Icon(
-                              _step < 2
+                              _step < _completionStep
                                   ? Icons.arrow_forward_rounded
                                   : Icons.check_rounded,
                               size: 20),
                       label: Text(_saving
                           ? 'Menyimpan…'
-                          : _step < 2
+                          : _step < _completionStep
                               ? 'Lanjut'
                               : 'Simpan laporan'),
                     )),
@@ -349,7 +390,7 @@ class _FormScreenState extends State<FormScreen> {
 
   Widget _stepNavigation() =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('LANGKAH ${_step + 1} DARI 3',
+        Text('LANGKAH ${_step + 1} DARI $_stepCount',
             style: const TextStyle(
                 fontSize: 11,
                 letterSpacing: 1.3,
@@ -357,19 +398,19 @@ class _FormScreenState extends State<FormScreen> {
                 fontWeight: FontWeight.w700)),
         const SizedBox(height: 10),
         Wrap(spacing: 8, runSpacing: 8, children: [
-          for (final entry
-              in ['Perjalanan', 'Keuangan', 'Lampiran'].asMap().entries)
-            ChoiceChip(
-                label: Text('${entry.key + 1}. ${entry.value}'),
-                selected: _step == entry.key,
-                showCheckmark: false,
-                onSelected: (_) => _goToStep(entry.key)),
+          for (final entry in _stepLabels.asMap().entries)
+            _StepPill(
+              key: ValueKey('langkah-${entry.key}'),
+              label: '${entry.key + 1}. ${entry.value}',
+              selected: _step == entry.key,
+              onTap: () => _goToStep(entry.key),
+            ),
         ]),
         const SizedBox(height: 12),
         ClipRRect(
             borderRadius: BorderRadius.circular(4),
             child: LinearProgressIndicator(
-                value: (_step + 1) / 3,
+                value: (_step + 1) / _stepCount,
                 minHeight: 4,
                 backgroundColor: AppColors.border)),
       ]);
@@ -384,6 +425,14 @@ class _FormScreenState extends State<FormScreen> {
               suffixIcon: const Icon(Icons.lock_outline, size: 18)),
           const SizedBox(height: 16),
           _text(_namaTamu, 'Nama tamu', hint: 'Nama tamu atau kelompok'),
+          const SizedBox(height: 8),
+          _GuestToggle(
+            value: _hasGuest,
+            onChanged: (value) => setState(() {
+              _hasGuest = value;
+              if (!value && _step > 2) _step = 2;
+            }),
+          ),
           const SizedBox(height: 16),
           _text(_jam, 'Jam berangkat',
               hint: '08:00',
@@ -718,6 +767,14 @@ class _FormScreenState extends State<FormScreen> {
         _balanceCard(),
       ];
 
+  List<Widget> _guestFinanceFields() => [
+        _guestAllowanceCard(),
+        const SizedBox(height: 16),
+        _guestExpensesCard(),
+        const SizedBox(height: 16),
+        _guestBalanceCard(),
+      ];
+
   List<Widget> _completionFields() => [
         SectionCard(
             child: Column(children: [
@@ -847,6 +904,113 @@ class _FormScreenState extends State<FormScreen> {
             deficit
                 ? 'Pengeluaran melebihi uang saku.'
                 : 'Uang saku dikurangi pengeluaran.',
+            style: TextStyle(color: color, fontSize: 12)),
+      ]),
+    );
+  }
+
+  String get _guestNameSuffix {
+    final name = _namaTamu.text.trim();
+    return name.isEmpty ? '' : ' $name';
+  }
+
+  Widget _guestAllowanceCard() => SectionCard(
+          child: Column(children: [
+        SectionHeading(
+            title: 'Uang saku tamu$_guestNameSuffix',
+            subtitle: 'Uang saku tamu diterima, terpisah dari kas utama.',
+            icon: Icons.account_balance_wallet_outlined),
+        _numberField(_guestUangSaku, 'Uang saku diterima'),
+      ]));
+
+  Widget _guestExpensesCard() => SectionCard(
+          child: Column(children: [
+        SectionHeading(
+            title: 'Pengeluaran tamu$_guestNameSuffix',
+            icon: Icons.receipt_long_outlined),
+        _numberField(_guestTol, 'Tol'),
+        const SizedBox(height: 16),
+        _numberField(_guestPenyeberangan, 'Penyeberangan'),
+        const SizedBox(height: 16),
+        _numberField(_guestParkir, 'Parkir'),
+        const SizedBox(height: 16),
+        ..._guestExtraFields(),
+        const SizedBox(height: 16),
+        _text(_guestCatatan, 'Catatan tamu', hint: 'Opsional', maxLines: 3),
+      ]));
+
+  List<Widget> _guestExtraFields() => [
+        for (var i = 0; i < _guestExtraNames.length; i++) ...[
+          Container(
+            key: ObjectKey(_guestExtraNames[i]),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+                color: AppColors.canvas,
+                borderRadius: BorderRadius.circular(12)),
+            child: Column(children: [
+              _text(_guestExtraNames[i], 'Nama extra tamu ${i + 1}'),
+              const SizedBox(height: 12),
+              _numberField(_guestExtraAmounts[i], 'Harga extra tamu ${i + 1}'),
+              Align(
+                alignment: Alignment.centerRight,
+                child: TextButton.icon(
+                  onPressed: _busy ? null : () => _removeGuestExtra(i),
+                  icon: const Icon(Icons.delete_outline_rounded, size: 18),
+                  label: const Text('Hapus'),
+                ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (_guestExtraError != null) ...[
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(_guestExtraError!,
+                style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+          ),
+          const SizedBox(height: 8),
+        ],
+        OutlinedButton.icon(
+          onPressed: _busy ? null : _addGuestExtra,
+          icon: const Icon(Icons.add_rounded, size: 20),
+          label: const Text('Tambah Extra tamu'),
+        ),
+      ];
+
+  Widget _guestBalanceCard() {
+    final report = _buildReport();
+    final deficit = report.guestSisa < 0;
+    final color = deficit ? AppColors.danger : AppColors.success;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+          color: deficit ? AppColors.dangerSoft : AppColors.successSoft,
+          borderRadius: BorderRadius.circular(20)),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        _summaryRow('Uang saku tamu', formatRupiah(report.guestUangSaku)),
+        const SizedBox(height: 8),
+        _summaryRow('Total pengeluaran tamu',
+            formatRupiah(report.guestTotalPengeluaran)),
+        const Divider(height: 28),
+        Text(
+            deficit
+                ? 'Defisit uang tamu$_guestNameSuffix'
+                : 'Sisa uang tamu$_guestNameSuffix',
+            style: TextStyle(color: color, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 6),
+        Text(formatRupiah(report.guestSisa),
+            style: TextStyle(
+                color: color,
+                fontSize: 28,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -.5)),
+        const SizedBox(height: 6),
+        Text(
+            deficit
+                ? 'Pengeluaran tamu melebihi uang saku tamu.'
+                : 'Uang saku tamu dikurangi pengeluaran tamu.',
             style: TextStyle(color: color, fontSize: 12)),
       ]),
     );
@@ -1012,6 +1176,35 @@ class _FormScreenState extends State<FormScreen> {
         ),
       ];
 
+  void _addGuestExtra() {
+    final name = TextEditingController();
+    final amount = TextEditingController();
+    name.addListener(_changed);
+    amount.addListener(_changed);
+    setState(() {
+      _guestExtraNames.add(name);
+      _guestExtraAmounts.add(amount);
+      _guestExtraError = null;
+    });
+  }
+
+  void _removeGuestExtra(int index) {
+    FocusScope.of(context).unfocus();
+    final name = _guestExtraNames[index];
+    final amount = _guestExtraAmounts[index];
+    name.removeListener(_changed);
+    amount.removeListener(_changed);
+    setState(() {
+      _guestExtraNames.removeAt(index);
+      _guestExtraAmounts.removeAt(index);
+      _guestExtraError = null;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      name.dispose();
+      amount.dispose();
+    });
+  }
+
   void _addExtra() {
     final name = TextEditingController();
     final amount = TextEditingController();
@@ -1051,6 +1244,10 @@ class _FormScreenState extends State<FormScreen> {
       showAppMessage(context, _extraError!);
       return;
     }
+    if (_hasGuest && _step == 2 && !_validateGuestExtras()) {
+      showAppMessage(context, _guestExtraError!);
+      return;
+    }
     _goToStep(_step + 1);
   }
 
@@ -1075,6 +1272,34 @@ class _FormScreenState extends State<FormScreen> {
       }
     }
     setState(() => _extraError = null);
+    return true;
+  }
+
+  bool _validateGuestExtras() {
+    if (!_hasGuest) {
+      setState(() => _guestExtraError = null);
+      return true;
+    }
+    for (var i = 0; i < _guestExtraNames.length; i++) {
+      final name = _guestExtraNames[i].text.trim();
+      final amount = parseRupiahInput(_guestExtraAmounts[i].text);
+      final row = i + 1;
+      if (name.isEmpty && _guestExtraAmounts[i].text.trim().isEmpty) {
+        setState(() =>
+            _guestExtraError = 'Extra tamu $row belum diisi. Isi atau hapus.');
+        return false;
+      }
+      if (name.isEmpty) {
+        setState(() => _guestExtraError = 'Isi nama untuk extra tamu $row.');
+        return false;
+      }
+      if (amount <= 0) {
+        setState(() =>
+            _guestExtraError = 'Isi harga untuk "$name" lebih dari Rp 0.');
+        return false;
+      }
+    }
+    setState(() => _guestExtraError = null);
     return true;
   }
 
@@ -1118,6 +1343,18 @@ class _FormScreenState extends State<FormScreen> {
                 name: _extraNames[i].text.trim(),
                 amount: parseRupiahInput(_extraAmounts[i].text)),
         ],
+        hasGuestAllowance: _hasGuest,
+        guestUangSaku: parseRupiahInput(_guestUangSaku.text),
+        guestTol: parseRupiahInput(_guestTol.text),
+        guestPenyeberangan: parseRupiahInput(_guestPenyeberangan.text),
+        guestParkir: parseRupiahInput(_guestParkir.text),
+        guestExtras: [
+          for (var i = 0; i < _guestExtraNames.length; i++)
+            ExtraExpense(
+                name: _guestExtraNames[i].text.trim(),
+                amount: parseRupiahInput(_guestExtraAmounts[i].text)),
+        ],
+        guestCatatan: _guestCatatan.text.trim(),
       );
     }
     final Report? saved = existing;
@@ -1158,6 +1395,18 @@ class _FormScreenState extends State<FormScreen> {
               name: _extraNames[i].text.trim(),
               amount: parseRupiahInput(_extraAmounts[i].text)),
       ],
+      hasGuestAllowance: _hasGuest,
+      guestUangSaku: parseRupiahInput(_guestUangSaku.text),
+      guestTol: parseRupiahInput(_guestTol.text),
+      guestPenyeberangan: parseRupiahInput(_guestPenyeberangan.text),
+      guestParkir: parseRupiahInput(_guestParkir.text),
+      guestExtras: [
+        for (var i = 0; i < _guestExtraNames.length; i++)
+          ExtraExpense(
+              name: _guestExtraNames[i].text.trim(),
+              amount: parseRupiahInput(_guestExtraAmounts[i].text)),
+      ],
+      guestCatatan: _guestCatatan.text.trim(),
     );
   }
 
@@ -1172,6 +1421,11 @@ class _FormScreenState extends State<FormScreen> {
     if (!_validateExtras()) {
       _goToStep(1);
       showAppMessage(context, _extraError!);
+      return;
+    }
+    if (!_validateGuestExtras()) {
+      if (_hasGuest) _goToStep(2);
+      showAppMessage(context, _guestExtraError!);
       return;
     }
     setState(() => _saving = true);
@@ -1203,6 +1457,11 @@ class _FormScreenState extends State<FormScreen> {
       showAppMessage(context, _extraError!);
       return;
     }
+    if (!_validateGuestExtras()) {
+      if (_hasGuest) _goToStep(2);
+      showAppMessage(context, _guestExtraError!);
+      return;
+    }
     setState(() => _previewing = true);
     try {
       final report = _buildReport();
@@ -1224,6 +1483,74 @@ class _FormScreenState extends State<FormScreen> {
     } finally {
       if (mounted) setState(() => _previewing = false);
     }
+  }
+}
+
+/// Pill for one langkah. The selected pill grows slightly, without a checkmark.
+class _StepPill extends StatelessWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  const _StepPill(
+      {super.key,
+      required this.label,
+      required this.selected,
+      required this.onTap});
+
+  @override
+  Widget build(BuildContext context) => AnimatedScale(
+        scale: selected ? 1.02 : 1,
+        duration: const Duration(milliseconds: 180),
+        curve: Curves.easeOut,
+        child: ChoiceChip(
+          label: Text(label),
+          selected: selected,
+          showCheckmark: false,
+          onSelected: (_) => onTap(),
+        ),
+      );
+}
+
+/// Guest allowance toggle with the same fill as text inputs and a thin border,
+/// instead of the stock Material switch's thick track.
+class _GuestToggle extends StatelessWidget {
+  final bool value;
+  final ValueChanged<bool> onChanged;
+  const _GuestToggle({required this.value, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final trackFill =
+        Theme.of(context).inputDecorationTheme.fillColor ?? Colors.white;
+    return GestureDetector(
+      onTap: () => onChanged(!value),
+      child: Row(children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: Curves.easeOut,
+          width: 46,
+          height: 26,
+          padding: const EdgeInsets.all(2),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(13),
+            color: trackFill,
+            border:
+                Border.all(color: value ? AppColors.brand : AppColors.border),
+          ),
+          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: value ? AppColors.brand : Colors.white,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        const Expanded(child: Text('Ada uang saku tamu')),
+      ]),
+    );
   }
 }
 

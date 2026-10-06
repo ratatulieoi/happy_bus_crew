@@ -143,7 +143,14 @@ void main() {
     // The v10 table predates both the period list and the guest name column.
     final oldData = report().toMap()
       ..remove('trip_periods')
-      ..remove('nama_tamu');
+      ..remove('nama_tamu')
+      ..remove('has_guest_allowance')
+      ..remove('guest_uang_saku')
+      ..remove('guest_tol')
+      ..remove('guest_penyeberangan')
+      ..remove('guest_parkir')
+      ..remove('guest_extra_details')
+      ..remove('guest_catatan');
     final id = await legacy.insert('reports', oldData);
     await legacy.insert('report_attachments', {
       'report_id': id,
@@ -153,9 +160,19 @@ void main() {
     await legacy.close();
 
     final upgraded = await store.db;
-    expect(await upgraded.getVersion(), 12);
-    expect((await upgraded.query('reports')).single,
-        {...oldRow, 'trip_periods': null, 'nama_tamu': ''});
+    expect(await upgraded.getVersion(), 13);
+    expect((await upgraded.query('reports')).single, {
+      ...oldRow,
+      'trip_periods': null,
+      'nama_tamu': '',
+      'has_guest_allowance': 0,
+      'guest_uang_saku': 0,
+      'guest_tol': 0,
+      'guest_penyeberangan': 0,
+      'guest_parkir': 0,
+      'guest_extra_details': '[]',
+      'guest_catatan': '',
+    });
     final restored = (await store.getReport(id))!;
     expect(restored.namaTamu, isEmpty);
     expect(restored.tripPeriods, isNull);

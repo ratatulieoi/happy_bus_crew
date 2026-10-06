@@ -81,6 +81,15 @@ class Report {
   /// Total extra adalah jumlah seluruh harga dan dihitung tepat sekali.
   final List<ExtraExpense> extras;
 
+  // --- Guest allowance ---
+  bool hasGuestAllowance;
+  int guestUangSaku;
+  int guestTol;
+  int guestPenyeberangan;
+  int guestParkir;
+  final List<ExtraExpense> guestExtras;
+  String guestCatatan;
+
   // --- Tanda tangan ---
   String namaCrew; // nama pembuat laporan (penanda tangan)
 
@@ -111,6 +120,13 @@ class Report {
     List<TripPeriod>? tripPeriods,
     bool resetTripData = false,
     List<ExtraExpense>? extras,
+    this.hasGuestAllowance = false,
+    this.guestUangSaku = 0,
+    this.guestTol = 0,
+    this.guestPenyeberangan = 0,
+    this.guestParkir = 0,
+    List<ExtraExpense>? guestExtras,
+    this.guestCatatan = '',
   })  : assert(luarKotaCount == null || luarKotaCount >= 0),
         assert(dalamKotaCount == null || dalamKotaCount >= 0),
         _legacyLuarKotaCount = resetTripData
@@ -129,7 +145,8 @@ class Report {
                 ? null
                 : List.unmodifiable(tripPeriods),
         tanggalBuat = tanggalBuat ?? DateTime.now(),
-        extras = List.unmodifiable(extras ?? const <ExtraExpense>[]);
+        extras = List.unmodifiable(extras ?? const <ExtraExpense>[]),
+        guestExtras = List.unmodifiable(guestExtras ?? const <ExtraExpense>[]);
 
   /// Jumlah seluruh harga extra. Setiap harga dihitung tepat satu kali.
   int get extra => extras.fold(0, (sum, item) => sum + item.amount);
@@ -140,6 +157,23 @@ class Report {
 
   /// Sisa = Uang Saku - total pengeluaran.
   int get sisa => uangSaku - totalPengeluaran;
+
+  int get guestExtraTotal =>
+      guestExtras.fold(0, (sum, item) => sum + item.amount);
+
+  int get guestTotalPengeluaran =>
+      guestTol + guestPenyeberangan + guestParkir + guestExtraTotal;
+
+  int get guestSisa => guestUangSaku - guestTotalPengeluaran;
+
+  bool get hasGuestData =>
+      hasGuestAllowance ||
+      guestUangSaku != 0 ||
+      guestTol != 0 ||
+      guestPenyeberangan != 0 ||
+      guestParkir != 0 ||
+      guestExtras.isNotEmpty ||
+      guestCatatan.isNotEmpty;
 
   /// Label ringkas untuk ditampilkan di daftar laporan (Home).
   String get ringkas =>
@@ -172,6 +206,14 @@ class Report {
       'pembayaran_tagihan': pembayaranTagihan,
       'nama_crew': namaCrew,
       'catatan': catatan,
+      'has_guest_allowance': hasGuestAllowance ? 1 : 0,
+      'guest_uang_saku': guestUangSaku,
+      'guest_tol': guestTol,
+      'guest_penyeberangan': guestPenyeberangan,
+      'guest_parkir': guestParkir,
+      'guest_extra_details':
+          jsonEncode([for (final item in guestExtras) item.toMap()]),
+      'guest_catatan': guestCatatan,
     };
   }
 
@@ -200,6 +242,14 @@ class Report {
       extras: _extrasFromMap(map),
       namaCrew: map['nama_crew'] as String? ?? '',
       catatan: map['catatan'] as String? ?? '',
+      hasGuestAllowance:
+          map['has_guest_allowance'] == 1 || map['has_guest_allowance'] == true,
+      guestUangSaku: map['guest_uang_saku'] as int? ?? 0,
+      guestTol: map['guest_tol'] as int? ?? 0,
+      guestPenyeberangan: map['guest_penyeberangan'] as int? ?? 0,
+      guestParkir: map['guest_parkir'] as int? ?? 0,
+      guestExtras: _guestExtrasFromMap(map['guest_extra_details']),
+      guestCatatan: map['guest_catatan'] as String? ?? '',
     );
   }
 
@@ -251,6 +301,25 @@ class Report {
     return const [];
   }
 
+  /// Read guest extras, rejecting malformed details as a whole.
+  static List<ExtraExpense> _guestExtrasFromMap(Object? details) {
+    if (details is! String || details.trim().isEmpty) return const [];
+    try {
+      final decoded = jsonDecode(details);
+      if (decoded is! List) return const [];
+      final items = <ExtraExpense>[];
+      for (final entry in decoded) {
+        if (entry is! Map<String, dynamic>) {
+          throw const FormatException('Invalid guest extra expense');
+        }
+        items.add(ExtraExpense.fromMap(entry));
+      }
+      return items;
+    } on FormatException {
+      return const [];
+    }
+  }
+
   /// Salinan dengan satu field diubah — mempermudah update dari form.
   Report copyWith({
     int? id,
@@ -278,6 +347,13 @@ class Report {
     List<ExtraExpense>? extras,
     String? namaCrew,
     String? catatan,
+    bool? hasGuestAllowance,
+    int? guestUangSaku,
+    int? guestTol,
+    int? guestPenyeberangan,
+    int? guestParkir,
+    List<ExtraExpense>? guestExtras,
+    String? guestCatatan,
   }) {
     return Report(
       id: id ?? this.id,
@@ -303,6 +379,13 @@ class Report {
       extras: extras ?? this.extras,
       namaCrew: namaCrew ?? this.namaCrew,
       catatan: catatan ?? this.catatan,
+      hasGuestAllowance: hasGuestAllowance ?? this.hasGuestAllowance,
+      guestUangSaku: guestUangSaku ?? this.guestUangSaku,
+      guestTol: guestTol ?? this.guestTol,
+      guestPenyeberangan: guestPenyeberangan ?? this.guestPenyeberangan,
+      guestParkir: guestParkir ?? this.guestParkir,
+      guestExtras: guestExtras ?? this.guestExtras,
+      guestCatatan: guestCatatan ?? this.guestCatatan,
     );
   }
 }

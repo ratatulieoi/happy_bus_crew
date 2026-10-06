@@ -229,7 +229,7 @@ void main() {
     expect((await store.getSelectedBus())!.name, 'Selected');
     expect((await store.getSelectedBus())!.plate, 'L 4004 AB');
     final db = await store.db;
-    expect(await db.getVersion(), 12);
+    expect(await db.getVersion(), 13);
     expect(await db.query('reports'), [
       {
         'id': 7,
@@ -243,6 +243,13 @@ void main() {
         'trip_periods': null,
         'pembayaran_tagihan': 0,
         'nama_tamu': '',
+        'has_guest_allowance': 0,
+        'guest_uang_saku': 0,
+        'guest_tol': 0,
+        'guest_penyeberangan': 0,
+        'guest_parkir': 0,
+        'guest_extra_details': '[]',
+        'guest_catatan': '',
       }
     ]);
     expect(await db.query('report_attachments'), [

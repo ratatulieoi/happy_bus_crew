@@ -171,7 +171,7 @@ void main() {
       await legacy.close();
 
       final upgraded = await store.db;
-      expect(await upgraded.getVersion(), 12);
+      expect(await upgraded.getVersion(), 13);
       final rows = await upgraded.query('reports', orderBy: 'id');
       for (var i = 0; i < rows.length; i++) {
         expect(rows[i], {
@@ -184,6 +184,13 @@ void main() {
           if (version < 11) 'trip_periods': null,
           if (version < 12) 'nama_tamu': '',
           if (version < 10) 'tagihan': 0,
+          'has_guest_allowance': 0,
+          'guest_uang_saku': 0,
+          'guest_tol': 0,
+          'guest_penyeberangan': 0,
+          'guest_parkir': 0,
+          'guest_extra_details': '[]',
+          'guest_catatan': '',
         });
       }
       expect(await upgraded.query('report_attachments'), originalReceipts);
