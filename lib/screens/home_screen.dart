@@ -1,11 +1,11 @@
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
 import '../db/database.dart';
 import '../models/bus.dart';
 import '../models/report.dart';
+import '../models/report_attachment.dart';
 import '../ui/app_theme.dart';
 import '../ui/components.dart';
 import '../utils/format.dart';
@@ -326,12 +326,15 @@ class _HomeScreenState extends State<HomeScreen> {
   Future<void> _openPreview(Report report) async {
     setState(() => _opening = true);
     try {
-      final images = <Uint8List>[];
+      final images = <ReportAttachmentImage>[];
       if (report.id != null) {
         for (final attachment
             in await DatabaseHelper.instance.getAttachments(report.id!)) {
           final file = File(attachment.filePath);
-          if (await file.exists()) images.add(await file.readAsBytes());
+          if (await file.exists()) {
+            images.add(ReportAttachmentImage(
+                bytes: await file.readAsBytes(), owner: attachment.owner));
+          }
         }
       }
       if (!mounted) return;

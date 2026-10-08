@@ -25,12 +25,14 @@ class TripPeriod {
   final DateTime start;
   final DateTime end;
   final TripType type;
+  final String origin;
   final String destination;
 
   TripPeriod({
     required DateTime start,
     required DateTime end,
     required this.type,
+    this.origin = '',
     this.destination = '',
   })  : start = DateTime(start.year, start.month, start.day),
         end = DateTime(end.year, end.month, end.day) {
@@ -48,6 +50,7 @@ class TripPeriod {
         'start': _dateString(start),
         'end': _dateString(end),
         'type': type.value,
+        if (origin.isNotEmpty) 'origin': origin,
         if (destination.isNotEmpty) 'destination': destination,
       };
 
@@ -55,14 +58,20 @@ class TripPeriod {
     final type = TripType.fromValue(map['type']);
     final start = _parseDate(map['start']);
     final end = _parseDate(map['end']);
+    final origin = map['origin'] ?? '';
     final destination = map['destination'] ?? '';
     if (type == TripType.unspecified ||
         end.isBefore(start) ||
+        origin is! String ||
         destination is! String) {
       throw const FormatException('Invalid trip period');
     }
     return TripPeriod(
-        start: start, end: end, type: type, destination: destination);
+        start: start,
+        end: end,
+        type: type,
+        origin: origin,
+        destination: destination);
   }
 
   /// Shared boundary dates count as overlap. Time of day is ignored.

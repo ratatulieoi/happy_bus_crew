@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:happy_bus_crew/models/report.dart';
+import 'package:happy_bus_crew/models/report_attachment.dart';
 import 'package:happy_bus_crew/pdf/report_pdf.dart';
 import 'package:happy_bus_crew/screens/form_screen.dart';
 import 'package:happy_bus_crew/utils/format.dart';
@@ -209,8 +210,8 @@ void main() {
       final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
       expect(
           text,
-          contains('Total LK ${counts[0]} / DK ${counts[1]} '
-              '${counts[0] + counts[1]}'));
+          contains('Total periode ${counts[0] + counts[1]} hari '
+              'LK ${counts[0]} / DK ${counts[1]}'));
       expect(text, isNot(contains('Kategori lama')));
     }
   });
@@ -224,7 +225,7 @@ void main() {
         'dalam_kota_count': null,
       }).copyWith(tripType: type));
       final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
-      expect(text, contains('Total - -'));
+      expect(text, contains('Total periode - -'));
       if (type == TripType.unspecified) {
         expect(text, isNot(contains('Kategori lama')));
       } else {
@@ -369,16 +370,16 @@ void main() {
   test('PDF lists each extra by name and keeps totals consistent', () async {
     final doc = await ReportPdfBuilder.build(report());
     final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
-    expect(text, contains('BBM 600.000'));
-    expect(text, contains('Uang Makan 100.000'));
-    expect(text, contains('Parkir 20.000'));
-    expect(text, contains('Tol 30.000'));
-    expect(text.indexOf('BBM'), lessThan(text.indexOf('Uang Makan')));
-    expect(text.indexOf('Uang Makan'), lessThan(text.indexOf('Parkir')));
+    expect(text, contains('BBM Rp600.000'));
+    expect(text, contains('Uang makan · 2 hari × Rp50.000 Rp100.000'));
+    expect(text, contains('Parkir Rp20.000'));
+    expect(text, contains('Tol Rp30.000'));
+    expect(text.indexOf('BBM'), lessThan(text.indexOf('Uang makan')));
+    expect(text.indexOf('Uang makan'), lessThan(text.indexOf('Parkir')));
     expect(text.indexOf('Parkir'), lessThan(text.indexOf('Tol')));
-    expect(text, contains('Total Pengeluaran 750.000'));
-    expect(text, contains('SISA Rp 250.000'));
-    expect(text, contains('Pembayaran tagihan Rp 50.000'));
+    expect(text, contains('Total pengeluaran Rp750.000'));
+    expect(text, contains('Sisa Rp250.000'));
+    expect(text, contains('Pembayaran Tagihan Rp50.000'));
   });
 
   test('manual meal amount round-trips into PDF expenses and office balance',
@@ -395,12 +396,12 @@ void main() {
       expect(reopened.copyWith(tripPeriods: []).uangMakan, amount);
       final doc = await ReportPdfBuilder.build(reopened);
       final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
-      expect(text, contains('Uang Makan ${formatNumberId(amount)}'));
+      expect(text, contains('Uang makan Rp${formatNumberId(amount)}'));
       expect(text,
-          contains('Total Pengeluaran ${formatNumberId(650000 + amount)}'));
-      expect(text, contains('SISA ${formatRupiah(350000 - amount)}'));
-      expect(text, contains('Pembayaran tagihan Rp 50.000'));
-      expect(text, contains('SISA DISCOVA Rp 190.000'));
+          contains('Total pengeluaran Rp${formatNumberId(650000 + amount)}'));
+      expect(text, contains('Sisa Rp${formatNumberId(350000 - amount)}'));
+      expect(text, contains('Pembayaran Tagihan Rp50.000'));
+      expect(text, contains('Sisa Rp190.000'));
     }
   });
 
@@ -412,16 +413,7 @@ void main() {
     final doc = await ReportPdfBuilder.build(r);
     final raw = latin1.decode(await doc.save());
     expect(RegExp(r'/Type\s*/Page\b').allMatches(raw).length, greaterThan(1));
-    final streams = <String>[];
-    for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true)
-        .allMatches(raw)) {
-      try {
-        streams.add(latin1.decode(zlib.decode(latin1.encode(match.group(1)!))));
-      } on FormatException {
-        streams.add(match.group(1)!);
-      }
-    }
-    final content = streams.join('\n');
+    final content = (await pdfPageText(doc)).join('\n');
     expect(content, contains('Item000'));
     expect(content, contains('Item079'));
     expect(r.extra, 80000);
@@ -430,8 +422,11 @@ void main() {
   test('PDF retains receipts but omits time and kilometer output', () async {
     final logo =
         (await rootBundle.load('assets/logo.png')).buffer.asUint8List();
-    final doc = await ReportPdfBuilder.build(report(),
-        attachmentImages: [logo, logo, Uint8List(0)]);
+    final doc = await ReportPdfBuilder.build(report(), attachmentImages: [
+      ReportAttachmentImage(bytes: logo),
+      ReportAttachmentImage(bytes: logo),
+      ReportAttachmentImage(bytes: Uint8List(0)),
+    ]);
     final bytes = await doc.save();
     expect(ascii.decode(bytes.take(5).toList()), '%PDF-');
     final pdfPages = doc.document.pdfPageList.pages;
@@ -443,27 +438,14 @@ void main() {
       }
     }
     final raw = latin1.decode(bytes);
-    expect(RegExp(r'/Type\s*/Page\b').allMatches(raw).length, 3);
-    final streams = <String>[];
-    for (final match in RegExp(r'stream\r?\n(.*?)\r?\nendstream', dotAll: true)
-        .allMatches(raw)) {
-      final data = latin1.encode(match.group(1)!);
-      try {
-        streams.add(latin1.decode(zlib.decode(data)));
-      } on FormatException {
-        streams.add(match.group(1)!);
-      }
-    }
-    final content = streams.join('\n');
+    expect(RegExp(r'/Type\s*/Page\b').allMatches(raw).length, 2);
+    final content = (await pdfPageText(doc)).join('\n');
     expect(content, isNot(contains('Awal')));
     expect(content, isNot(contains('Akhir')));
     expect(content, isNot(contains('Jam')));
     expect(content, isNot(contains('08:00')));
-    expect(attachmentPageContent, hasLength(2));
-    expect(
-      attachmentPageContent.every((page) => page.contains('Lampiran')),
-      isTrue,
-    );
+    expect(attachmentPageContent, hasLength(1));
+    expect(normalizePdfText(content), contains('Lampiran belum dikelompokkan'));
     expect(content, isNot(contains('Struk Pembelian Bensin')));
     expect(content, isNot(contains('Bensin')));
     expect(content, isNot(contains('(1.000)')));

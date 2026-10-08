@@ -9,10 +9,13 @@ import 'package:happy_bus_crew/models/report_attachment.dart';
 import 'package:happy_bus_crew/screens/form_screen.dart';
 import 'package:happy_bus_crew/screens/home_screen.dart';
 import 'package:happy_bus_crew/screens/preview_screen.dart';
+import 'package:happy_bus_crew/pdf/report_pdf.dart';
 import 'package:happy_bus_crew/ui/app_theme.dart';
 import 'package:happy_bus_crew/ui/expense_photo_manager.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:sqflite/sqflite.dart';
+
+import 'support/pdf_text.dart';
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -233,6 +236,14 @@ void main() {
         draft.report.extras.map((extra) => extra.id), ['office-a', 'office-b']);
     expect(draft.report.extras.first.name, 'Parkir');
     expect(draft.attachmentImages, hasLength(6));
+    expect(draft.attachmentImages.map((image) => image.owner),
+        [first, first, first, second, bbm, meal]);
+    final draftPdf = await ReportPdfBuilder.build(draft.report,
+        attachmentImages: draft.attachmentImages);
+    final text = normalizePdfText((await pdfPageText(draftPdf)).join(' '));
+    expect(text, contains('Kantor · Parkir'));
+    expect(text, contains('Kantor · Tol'));
+    expect(text, contains('Kantor · BBM'));
     expect(links, isEmpty);
     expect(tester.takeException(), isNull);
   });
@@ -362,7 +373,20 @@ void main() {
     }
     final savedPreview =
         tester.widget<PreviewScreen>(find.byType(PreviewScreen));
-    expect(savedPreview.attachmentImages, draft.attachmentImages);
+    expect(savedPreview.attachmentImages.map((image) => image.owner),
+        draft.attachmentImages.map((image) => image.owner));
+    expect(savedPreview.attachmentImages.map((image) => image.bytes),
+        draft.attachmentImages.map((image) => image.bytes));
+    for (final preview in [draft, savedPreview]) {
+      final pdf = await ReportPdfBuilder.build(preview.report,
+          attachmentImages: preview.attachmentImages);
+      final text = normalizePdfText((await pdfPageText(pdf)).join(' '));
+      expect(text, contains('Kantor · Parkir'));
+      expect(text, contains('Discova · Tol'));
+      expect(text, contains('Discova · Penyeberangan'));
+      expect(text, contains('Discova · Parkir'));
+      expect(text, isNot(contains('Uang Saku Discova')));
+    }
     Navigator.of(tester.element(find.byType(PreviewScreen))).pop();
     await tester.pumpAndSettle();
     await tester.tap(find.byType(PopupMenuButton<String>).first);

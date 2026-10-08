@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -98,6 +99,83 @@ void main() {
     expect(restored.totalPengeluaran, 350000);
     expect(restored.pembayaranTagihan, original.pembayaranTagihan);
     expect(await store.getAttachments(id), paths);
+  });
+
+  test('route JSON saves and reopens without changing destination-only data',
+      () async {
+    final database = await store.db;
+    final schema = await database.query('sqlite_master', orderBy: 'name');
+    final version = await database.getVersion();
+    final id = await database.insert('reports', {
+      ...report().toMap(),
+      'trip_periods': jsonEncode([
+        {
+          'start': '2026-09-01',
+          'end': '2026-09-02',
+          'type': 'luar_kota',
+          'destination': 'Malang',
+        },
+        {
+          'start': '2026-09-03',
+          'end': '2026-09-05',
+          'type': 'dalam_kota',
+          'origin': 'Sidoarjo',
+          'destination': 'Surabaya',
+        },
+        {
+          'start': '2026-09-07',
+          'end': '2026-09-07',
+          'type': 'dalam_kota',
+          'origin': 'Batu',
+        },
+        {
+          'start': '2026-09-08',
+          'end': '2026-09-08',
+          'type': 'dalam_kota',
+          'origin': '',
+          'destination': '',
+        },
+      ]),
+    });
+    await store.close();
+    var restored = (await store.getReport(id))!;
+    expect(restored.tripPeriods!.map((period) => period.origin),
+        ['', 'Sidoarjo', 'Batu', '']);
+    expect(restored.tripPeriods!.map((period) => period.destination),
+        ['Malang', 'Surabaya', '', '']);
+    const attachments = [ReportAttachment(filePath: '/saved/receipt.jpg')];
+    await store.saveReportWithAttachments(restored, attachments);
+    await store.close();
+    final unchanged = (await store.getReport(id))!;
+    expect(unchanged.toMap(), restored.toMap());
+
+    final first = unchanged.tripPeriods!.first;
+    final edited = unchanged.copyWith(tripPeriods: [
+      TripPeriod(
+        start: first.start,
+        end: first.end,
+        type: first.type,
+        origin: 'Surabaya',
+        destination: first.destination,
+      ),
+      ...unchanged.tripPeriods!.skip(1),
+    ]);
+    await store.saveReportWithAttachments(edited, attachments);
+    await store.close();
+    restored = (await store.getReport(id))!;
+    expect(restored.toMap(), edited.toMap());
+    expect(restored.tripPeriods!.map((period) => period.origin),
+        ['Surabaya', 'Sidoarjo', 'Batu', '']);
+    expect(restored.tripPeriods!.map((period) => period.destination),
+        ['Malang', 'Surabaya', '', '']);
+    expect(restored.luarKotaCount, 2);
+    expect(restored.dalamKotaCount, 5);
+    expect(restored.uangMakan, 350000);
+    expect(await store.getAttachments(id), attachments);
+    final reopenedDatabase = await store.db;
+    expect(await reopenedDatabase.getVersion(), version);
+    expect(await reopenedDatabase.query('sqlite_master', orderBy: 'name'),
+        schema);
   });
 
   test('automatic meals persist and recalculate after range edits and clearing',

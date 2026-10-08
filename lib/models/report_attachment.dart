@@ -1,3 +1,14 @@
+import 'dart:typed_data';
+
+/// Image bytes and their expense identity, used by both PDF preview paths.
+/// A null owner preserves attachments from reports predating expense groups.
+class ReportAttachmentImage {
+  final Uint8List bytes;
+  final ExpenseOwner? owner;
+
+  const ReportAttachmentImage({required this.bytes, this.owner});
+}
+
 /// Stable expense keys, independent of display labels or extra row positions.
 enum ExpenseType {
   officeBbm('office_bbm'),

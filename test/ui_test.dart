@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:happy_bus_crew/main.dart';
 import 'package:happy_bus_crew/models/report.dart';
+import 'package:happy_bus_crew/models/report_attachment.dart';
 import 'package:happy_bus_crew/screens/form_screen.dart';
 import 'package:happy_bus_crew/screens/home_screen.dart';
 import 'package:happy_bus_crew/screens/preview_screen.dart';
@@ -1186,8 +1187,19 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  Finder originField(int index) =>
+      find.widgetWithText(TextFormField, 'Asal').at(index);
+
   Finder destinationField(int index) =>
-      find.widgetWithText(TextFormField, 'Destinasi').at(index);
+      find.widgetWithText(TextFormField, 'Tujuan').at(index);
+
+  Future<void> enterOrigin(
+      WidgetTester tester, int index, String value) async {
+    final field = originField(index);
+    await reveal(tester, field);
+    await tester.enterText(field, value);
+    await tester.pumpAndSettle();
+  }
 
   Future<void> enterDestination(
       WidgetTester tester, int index, String value) async {
@@ -1197,7 +1209,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('separate period destinations survive preview, save and reopen',
+  testWidgets('independent period routes survive preview, save and reopen',
       (tester) async {
     await pumpScreen(tester, const HomeScreen());
     await tester.tap(find.text('Buat laporan baru'));
@@ -1205,12 +1217,22 @@ void main() {
     await selectBus(tester);
     await addPeriod(
         tester, DateTime(2026, 6, 1), DateTime(2026, 6, 2), TripType.luarKota);
+    await enterOrigin(tester, 0, 'Surabaya');
+    expect(tester.widget<TextFormField>(destinationField(0)).controller!.text,
+        isEmpty);
     await enterDestination(tester, 0, 'Malang');
     await addPeriod(
         tester, DateTime(2026, 6, 5), DateTime(2026, 6, 5), TripType.dalamKota);
     await enterDestination(tester, 1, 'Surabaya');
+    expect(tester.widget<TextFormField>(originField(1)).controller!.text,
+        isEmpty);
+    await enterOrigin(tester, 1, 'Sidoarjo');
+    expect(tester.widget<TextFormField>(originField(0)).controller!.text,
+        'Surabaya');
     expect(tester.widget<TextFormField>(destinationField(0)).controller!.text,
         'Malang');
+    expect(tester.widget<TextFormField>(originField(1)).controller!.text,
+        'Sidoarjo');
     expect(tester.widget<TextFormField>(destinationField(1)).controller!.text,
         'Surabaya');
 
@@ -1218,6 +1240,8 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     final preview = tester.widget<PreviewScreen>(find.byType(PreviewScreen));
+    expect(preview.report.tripPeriods!.map((period) => period.origin),
+        ['Surabaya', 'Sidoarjo']);
     expect(preview.report.tripPeriods!.map((period) => period.destination),
         ['Malang', 'Surabaya']);
     expect(savedReport, isNull);
@@ -1231,6 +1255,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(HomeScreen), findsOneWidget);
     final restored = Report.fromMap(savedReport!);
+    expect(restored.tripPeriods!.map((period) => period.origin),
+        ['Surabaya', 'Sidoarjo']);
     expect(restored.tripPeriods!.map((period) => period.destination),
         ['Malang', 'Surabaya']);
     expect(restored.luarKotaCount, 2);
@@ -1239,15 +1265,18 @@ void main() {
 
     await pumpScreen(tester, FormScreen(report: restored));
     await reveal(tester, destinationField(1));
+    expect(tester.widget<TextFormField>(originField(0)).controller!.text,
+        'Surabaya');
     expect(tester.widget<TextFormField>(destinationField(0)).controller!.text,
         'Malang');
+    expect(tester.widget<TextFormField>(originField(1)).controller!.text,
+        'Sidoarjo');
     expect(tester.widget<TextFormField>(destinationField(1)).controller!.text,
         'Surabaya');
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets(
-      'empty and cleared destinations allow navigation, preview and save',
+  testWidgets('empty and cleared routes allow navigation, preview and save',
       (tester) async {
     reports = [
       fixture().copyWith(tripPeriods: [
@@ -1255,6 +1284,7 @@ void main() {
             start: DateTime(2026, 6, 1),
             end: DateTime(2026, 6, 1),
             type: TripType.luarKota,
+            origin: 'Surabaya',
             destination: 'Malang'),
         TripPeriod(
             start: DateTime(2026, 6, 5),
@@ -1267,9 +1297,10 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ubah laporan'));
     await tester.pumpAndSettle();
+    await enterOrigin(tester, 0, '');
+    expect(tester.widget<TextFormField>(destinationField(0)).controller!.text,
+        'Malang');
     await enterDestination(tester, 0, '');
-    final destinationInput = tester.widget<TextField>(find.descendant(
-        of: destinationField(0), matching: find.byType(TextField)));
     expect(
         tester
             .widget<EditableText>(find.descendant(
@@ -1277,13 +1308,21 @@ void main() {
             .focusNode
             .hasFocus,
         isTrue);
-    expect(destinationInput.decoration!.labelText, 'Destinasi');
-    expect(destinationInput.decoration!.hintText, isNull);
-    expect(destinationInput.decoration!.helperText, isNull);
+    for (final field in [originField(0), destinationField(0)]) {
+      final input = tester.widget<TextField>(
+          find.descendant(of: field, matching: find.byType(TextField)));
+      expect(input.decoration!.hintText, isNull);
+      expect(input.decoration!.helperText, isNull);
+      expect(input.maxLines, 1);
+    }
+    expect(find.widgetWithText(TextFormField, 'Destinasi'), findsNothing);
+    expect(tester.widget<TextFormField>(originField(1)).controller!.text,
+        isEmpty);
     expect(tester.widget<TextFormField>(destinationField(1)).controller!.text,
         isEmpty);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
+    await reveal(tester, find.text('Keuangan Kantor'));
     expect(find.text('Keuangan Kantor'), findsOneWidget);
     await reveal(tester, find.text('3. Penyelesaian'));
     await tester.tap(find.text('3. Penyelesaian'));
@@ -1293,6 +1332,7 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     final preview = tester.widget<PreviewScreen>(find.byType(PreviewScreen));
+    expect(preview.report.tripPeriods!.map((period) => period.origin), ['', '']);
     expect(preview.report.tripPeriods!.map((period) => period.destination),
         ['', '']);
     await tester.tap(find.byType(BackButton));
@@ -1301,39 +1341,48 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(HomeScreen), findsOneWidget);
     final restored = Report.fromMap(savedReport!);
+    expect(restored.tripPeriods!.map((period) => period.origin), ['', '']);
     expect(restored.tripPeriods!.map((period) => period.destination), ['', '']);
     expect(restored.mealDays, 2);
     await pumpScreen(tester, FormScreen(report: restored));
     await reveal(tester, destinationField(1));
-    expect(tester.widget<TextFormField>(destinationField(0)).controller!.text,
-        isEmpty);
-    expect(tester.widget<TextFormField>(destinationField(1)).controller!.text,
-        isEmpty);
+    for (var i = 0; i < 2; i++) {
+      expect(tester.widget<TextFormField>(originField(i)).controller!.text,
+          isEmpty);
+      expect(tester.widget<TextFormField>(destinationField(i)).controller!.text,
+          isEmpty);
+    }
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('destination edits survive date and type changes and row removal',
+  testWidgets('route edits survive date and type changes and row removal',
       (tester) async {
     final report = fixture().copyWith(tripPeriods: [
       TripPeriod(
           start: DateTime(2026, 6, 1),
           end: DateTime(2026, 6, 1),
           type: TripType.luarKota,
+          origin: 'Surabaya',
           destination: 'Malang'),
       TripPeriod(
           start: DateTime(2026, 6, 5),
           end: DateTime(2026, 6, 5),
           type: TripType.luarKota,
+          origin: 'Malang',
           destination: 'Batu'),
       TripPeriod(
           start: DateTime(2026, 6, 9),
           end: DateTime(2026, 6, 9),
           type: TripType.dalamKota,
+          origin: 'Sidoarjo',
           destination: 'Surabaya'),
     ]);
     await pumpScreen(tester, FormScreen(report: report));
+    await enterOrigin(tester, 1, 'Malang | Terminal');
     await enterDestination(tester, 1, 'Batu | Selecta');
-    final survivingController =
+    final survivingOrigin =
+        tester.widget<TextFormField>(originField(1)).controller!;
+    final survivingDestination =
         tester.widget<TextFormField>(destinationField(1)).controller!;
     await openRange(tester, 1);
     await returnRange(tester, DateTime(2026, 6, 5), DateTime(2026, 6, 6));
@@ -1341,29 +1390,44 @@ void main() {
     await reveal(tester, type);
     await tester.tap(type);
     await tester.pumpAndSettle();
-    expect(survivingController.text, 'Batu | Selecta');
+    expect(survivingOrigin.text, 'Malang | Terminal');
+    expect(survivingDestination.text, 'Batu | Selecta');
     await reveal(tester, find.byTooltip('Hapus periode 1'));
     await tester.tap(find.byTooltip('Hapus periode 1'));
     await tester.pumpAndSettle();
+    expect(tester.widget<TextFormField>(originField(0)).controller,
+        same(survivingOrigin));
     expect(tester.widget<TextFormField>(destinationField(0)).controller,
-        same(survivingController));
-    expect(survivingController.text, 'Batu | Selecta');
+        same(survivingDestination));
+    expect(survivingOrigin.text, 'Malang | Terminal');
+    expect(survivingDestination.text, 'Batu | Selecta');
+    expect(tester.widget<TextFormField>(originField(1)).controller!.text,
+        'Sidoarjo');
     expect(tester.widget<TextFormField>(destinationField(1)).controller!.text,
         'Surabaya');
 
     await addPeriod(tester, DateTime(2026, 6, 12), DateTime(2026, 6, 12),
         TripType.luarKota);
+    expect(tester.widget<TextFormField>(originField(2)).controller!.text,
+        isEmpty);
     expect(tester.widget<TextFormField>(destinationField(2)).controller!.text,
         isEmpty);
+    await enterOrigin(tester, 2, 'Surabaya');
     await enterDestination(tester, 2, 'Kediri');
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Kembali'));
     await tester.pumpAndSettle();
     await reveal(tester, destinationField(2));
+    expect(tester.widget<TextFormField>(originField(0)).controller!.text,
+        'Malang | Terminal');
     expect(tester.widget<TextFormField>(destinationField(0)).controller!.text,
         'Batu | Selecta');
+    expect(tester.widget<TextFormField>(originField(1)).controller!.text,
+        'Sidoarjo');
     expect(tester.widget<TextFormField>(destinationField(1)).controller!.text,
+        'Surabaya');
+    expect(tester.widget<TextFormField>(originField(2)).controller!.text,
         'Surabaya');
     expect(tester.widget<TextFormField>(destinationField(2)).controller!.text,
         'Kediri');
@@ -1374,6 +1438,8 @@ void main() {
     await tester.tap(find.text('Simpan laporan'));
     await tester.pumpAndSettle();
     final restored = Report.fromMap(savedReport!);
+    expect(restored.tripPeriods!.map((period) => period.origin),
+        ['Malang | Terminal', 'Sidoarjo', 'Surabaya']);
     expect(restored.tripPeriods!.map((period) => period.destination),
         ['Batu | Selecta', 'Surabaya', 'Kediri']);
     expect(restored.tripPeriods!.first.start, DateTime(2026, 6, 5));
@@ -1384,37 +1450,48 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('destination-only edits mark the form dirty and can be reverted',
-      (tester) async {
-    await pumpScreen(
-        tester,
-        FormScreen(
-            report: fixture().copyWith(tripPeriods: [
-          TripPeriod(
-              start: DateTime(2026, 6, 1),
-              end: DateTime(2026, 6, 1),
-              type: TripType.luarKota,
-              destination: 'Malang'),
-        ])));
-    bool canPop() => tester
-        .widget<PopScope>(
-            find.byWidgetPredicate((widget) => widget is PopScope))
-        .canPop;
-    expect(canPop(), isTrue);
-    await enterDestination(tester, 0, 'Batu');
-    expect(canPop(), isFalse);
-    await tester.tap(find.byTooltip('Kembali'));
-    await tester.pumpAndSettle();
-    expect(find.text('Keluar tanpa menyimpan?'), findsOneWidget);
-    await tester.tap(find.text('Lanjut mengisi'));
-    await tester.pumpAndSettle();
-    expect(tester.widget<TextFormField>(destinationField(0)).controller!.text,
-        'Batu');
-    await enterDestination(tester, 0, 'Malang');
-    expect(canPop(), isTrue);
-    expect(savedReport, isNull);
-    expect(tester.takeException(), isNull);
-  });
+  for (final label in ['Asal', 'Tujuan']) {
+    testWidgets('$label-only edits mark the form dirty and can be reverted',
+        (tester) async {
+      final legacy = Report.fromMap({
+        ...fixture().toMap(),
+        'trip_periods': '[{"start":"2026-06-01","end":"2026-06-01",'
+            '"type":"luar_kota","destination":"Malang"}]',
+      });
+      await pumpScreen(tester, FormScreen(report: legacy));
+      bool canPop() => tester
+          .widget<PopScope>(
+              find.byWidgetPredicate((widget) => widget is PopScope))
+          .canPop;
+      expect(canPop(), isTrue);
+      await reveal(tester, destinationField(0));
+      expect(tester.widget<TextFormField>(originField(0)).controller!.text,
+          isEmpty);
+      expect(tester.widget<TextFormField>(destinationField(0)).controller!.text,
+          'Malang');
+      final field = find.widgetWithText(TextFormField, label);
+      final original = label == 'Asal' ? '' : 'Malang';
+      await reveal(tester, field);
+      await tester.enterText(field, 'Batu');
+      await tester.pumpAndSettle();
+      expect(canPop(), isFalse);
+      await tester.tap(find.byTooltip('Kembali'));
+      await tester.pumpAndSettle();
+      expect(find.text('Keluar tanpa menyimpan?'), findsOneWidget);
+      await tester.tap(find.text('Lanjut mengisi'));
+      await tester.pumpAndSettle();
+      expect(tester.widget<TextFormField>(field).controller!.text, 'Batu');
+      final other = label == 'Asal' ? destinationField(0) : originField(0);
+      expect(tester.widget<TextFormField>(other).controller!.text,
+          label == 'Asal' ? 'Malang' : '');
+      await reveal(tester, field);
+      await tester.enterText(field, original);
+      await tester.pumpAndSettle();
+      expect(canPop(), isTrue);
+      expect(savedReport, isNull);
+      expect(tester.takeException(), isNull);
+    });
+  }
 
   testWidgets('langkah pills animate selection without a checklist icon',
       (tester) async {
@@ -2125,7 +2202,7 @@ void main() {
     await pumpScreen(
         tester,
         PreviewScreen(report: fixture(), attachmentImages: [
-          Uint8List.fromList([1, 2, 3])
+          ReportAttachmentImage(bytes: Uint8List.fromList([1, 2, 3]))
         ]));
     expect(find.text('PDF belum siap'), findsOneWidget);
     expect(find.text('Coba lagi'), findsOneWidget);
@@ -2157,7 +2234,7 @@ void main() {
     await pumpScreen(
         tester,
         PreviewScreen(report: fixture(), attachmentImages: [
-          Uint8List.fromList([1, 2, 3])
+          ReportAttachmentImage(bytes: Uint8List.fromList([1, 2, 3]))
         ]));
     final desktop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
     expect(find.text('Bagikan'), desktop ? findsNothing : findsOneWidget);

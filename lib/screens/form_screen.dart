@@ -126,7 +126,9 @@ class _FormScreenState extends State<FormScreen> {
           start: period.start,
           end: period.end,
           type: period.type,
+          origin: period.origin,
           destination: period.destination);
+      draft.origin.addListener(_changed);
       draft.destination.addListener(_changed);
       _periods.add(draft);
     }
@@ -239,6 +241,7 @@ class _FormScreenState extends State<FormScreen> {
       c.dispose();
     }
     for (final period in _periods) {
+      period.origin.removeListener(_changed);
       period.destination.removeListener(_changed);
       period.dispose();
     }
@@ -553,6 +556,7 @@ class _FormScreenState extends State<FormScreen> {
         if (_preserveLegacyTripData) 'legacy' else 'periods',
         for (final period in _periods) ...[
           '${period.start?.toIso8601String()}|${period.end?.toIso8601String()}|${period.type?.value}',
+          period.origin.text,
           period.destination.text,
         ],
       ];
@@ -567,6 +571,7 @@ class _FormScreenState extends State<FormScreen> {
                 start: period.start!,
                 end: period.end!,
                 type: period.type!,
+                origin: period.origin.text,
                 destination: period.destination.text),
       ];
 
@@ -652,13 +657,23 @@ class _FormScreenState extends State<FormScreen> {
                     const SizedBox(height: 12),
                     _periodRangeField(i),
                     const SizedBox(height: 12),
-                    _text(_periods[i].destination, 'Destinasi'),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(child: _text(_periods[i].origin, 'Asal')),
+                        const SizedBox(width: 12),
+                        Expanded(
+                            child: _text(_periods[i].destination, 'Tujuan')),
+                      ],
+                    ),
                     const SizedBox(height: 12),
-                    Wrap(spacing: 8, runSpacing: 8, children: [
+                    Row(children: [
                       for (final type in [
                         TripType.luarKota,
                         TripType.dalamKota
-                      ])
+                      ]) ...[
+                        if (type == TripType.dalamKota)
+                          const SizedBox(width: 8),
                         ChoiceChip(
                             label:
                                 Text(type == TripType.luarKota ? 'LK' : 'DK'),
@@ -672,10 +687,9 @@ class _FormScreenState extends State<FormScreen> {
                                           TripPeriod.validateNoOverlap(
                                               _completePeriods);
                                     })),
-                    ]),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Tooltip(
+                      ],
+                      const Spacer(),
+                      Tooltip(
                         message: 'Hapus periode ${i + 1}',
                         child: TextButton.icon(
                             onPressed: _busy ? null : () => _removePeriod(i),
@@ -683,7 +697,7 @@ class _FormScreenState extends State<FormScreen> {
                                 size: 18),
                             label: const Text('Hapus')),
                       ),
-                    ),
+                    ]),
                   ]),
             ),
             const SizedBox(height: 12),
@@ -703,6 +717,7 @@ class _FormScreenState extends State<FormScreen> {
 
   void _addPeriod() {
     final period = _TripPeriodDraft();
+    period.origin.addListener(_changed);
     period.destination.addListener(_changed);
     setState(() {
       _preserveLegacyTripData = false;
@@ -714,6 +729,7 @@ class _FormScreenState extends State<FormScreen> {
   void _removePeriod(int index) {
     FocusScope.of(context).unfocus();
     final removed = _periods[index];
+    removed.origin.removeListener(_changed);
     removed.destination.removeListener(_changed);
     setState(() {
       _periods.removeAt(index);
@@ -1480,9 +1496,11 @@ class _FormScreenState extends State<FormScreen> {
     setState(() => _previewing = true);
     try {
       final report = _buildReport();
-      final images = <Uint8List>[];
+      final images = <ReportAttachmentImage>[];
       for (final attachment in _attachments) {
-        images.add(await File(attachment.filePath).readAsBytes());
+        images.add(ReportAttachmentImage(
+            bytes: await File(attachment.filePath).readAsBytes(),
+            owner: attachment.owner));
       }
       if (!mounted) return;
       await Navigator.push<void>(
@@ -1577,12 +1595,22 @@ class _TripPeriodDraft {
   DateTime? start;
   DateTime? end;
   TripType? type;
+  final TextEditingController origin;
   final TextEditingController destination;
 
-  _TripPeriodDraft({this.start, this.end, this.type, String destination = ''})
-      : destination = TextEditingController(text: destination);
+  _TripPeriodDraft({
+    this.start,
+    this.end,
+    this.type,
+    String origin = '',
+    String destination = '',
+  })  : origin = TextEditingController(text: origin),
+        destination = TextEditingController(text: destination);
 
-  void dispose() => destination.dispose();
+  void dispose() {
+    origin.dispose();
+    destination.dispose();
+  }
 }
 
 /// Keeps the caret beside the edited digits, including edits in the middle.

@@ -9,6 +9,7 @@ import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../models/report.dart';
+import '../models/report_attachment.dart';
 import '../pdf/report_pdf.dart';
 import '../ui/app_theme.dart';
 import '../ui/components.dart';
@@ -17,7 +18,7 @@ import '../utils/format.dart';
 
 class PreviewScreen extends StatefulWidget {
   final Report report;
-  final List<Uint8List> attachmentImages;
+  final List<ReportAttachmentImage> attachmentImages;
   const PreviewScreen({
     super.key,
     required this.report,
