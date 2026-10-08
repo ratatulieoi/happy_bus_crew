@@ -21,7 +21,7 @@ void main() {
         hariTglBerangkat: 'Jumat, 12/06/2026',
         jamBerangkat: '08:00',
         hariTglKembali: 'Sabtu, 13/06/2026',
-        noPolisi: 'B 1001 XX',
+        noPolisi: 'AB 7317 BK',
         namaTamu: 'Bpk. Hartono',
         pengemudi: 'Budi',
         kernet: 'Agus',
@@ -29,8 +29,13 @@ void main() {
         kmAkhir: 1250,
         uangSaku: 1000000,
         bbm: 600000,
-        uangMakan: 100000,
-        extras: const [
+        tripPeriods: [
+          TripPeriod(
+              start: DateTime(2026, 6, 12),
+              end: DateTime(2026, 6, 13),
+              type: TripType.luarKota),
+        ],
+        extras: [
           ExtraExpense(name: 'Parkir', amount: 20000),
           ExtraExpense(name: 'Tol', amount: 30000),
         ],
@@ -56,7 +61,7 @@ void main() {
       guestTol: 15000,
       guestPenyeberangan: 25000,
       guestParkir: 10000,
-      guestExtras: const [ExtraExpense(name: 'Bagasi', amount: 5000)],
+      guestExtras: [ExtraExpense(name: 'Bagasi', amount: 5000)],
       guestCatatan: 'Titipan tamu',
     );
     final restored = Report.fromMap(original.toMap());
@@ -92,7 +97,7 @@ void main() {
       guestTol: 10000,
       guestPenyeberangan: 20000,
       guestParkir: 5000,
-      guestExtras: const [
+      guestExtras: [
         ExtraExpense(name: 'Bagasi', amount: 3000),
         ExtraExpense(name: 'Air minum', amount: 2000),
       ],
@@ -115,7 +120,7 @@ void main() {
     expect(report().copyWith(guestPenyeberangan: 1).hasGuestData, isTrue);
     expect(report().copyWith(guestParkir: 1).hasGuestData, isTrue);
     expect(
-        report().copyWith(guestExtras: const [
+        report().copyWith(guestExtras: [
           ExtraExpense(name: 'Bagasi', amount: 0)
         ]).hasGuestData,
         isTrue);
@@ -143,12 +148,14 @@ void main() {
   test('trip types round-trip, copy and preserve unspecified legacy reports',
       () {
     for (final type in TripType.values) {
-      final original = report().copyWith(tripType: type);
+      final original =
+          Report.fromMap({...report().toMap(), 'trip_periods': null})
+              .copyWith(tripType: type);
       expect(original.toMap()['trip_type'], type.value);
       final restored = Report.fromMap(original.toMap());
       expect(restored.tripType, type);
       expect(restored.copyWith(catatan: 'Edited').tripType, type);
-      expect(restored.totalPengeluaran, report().totalPengeluaran);
+      expect(restored.totalPengeluaran, 650000);
     }
     for (final value in [null, '', 'unknown', 123]) {
       expect(
@@ -164,8 +171,9 @@ void main() {
       [0, 5],
       [0, 0]
     ]) {
-      final original = report()
-          .copyWith(luarKotaCount: counts[0], dalamKotaCount: counts[1]);
+      final original =
+          Report.fromMap({...report().toMap(), 'trip_periods': null})
+              .copyWith(luarKotaCount: counts[0], dalamKotaCount: counts[1]);
       final restored = Report.fromMap(original.toMap());
       expect(restored.luarKotaCount, counts[0]);
       expect(restored.dalamKotaCount, counts[1]);
@@ -174,7 +182,7 @@ void main() {
           {...original.toMap(), 'catatan': 'Edited'});
       expect(restored.copyWith(luarKotaCount: 0).luarKotaCount, 0);
       expect(restored.copyWith(dalamKotaCount: 0).dalamKotaCount, 0);
-      expect(restored.totalPengeluaran, report().totalPengeluaran);
+      expect(restored.totalPengeluaran, 650000);
     }
     for (final type in TripType.values) {
       final legacy = Report.fromMap({'trip_type': type.value});
@@ -193,10 +201,11 @@ void main() {
       [3, 0],
       [0, 0]
     ]) {
-      final doc = await ReportPdfBuilder.build(report().copyWith(
-          tripType: TripType.luarKota,
-          luarKotaCount: counts[0],
-          dalamKotaCount: counts[1]));
+      final doc = await ReportPdfBuilder.build(
+          Report.fromMap({...report().toMap(), 'trip_periods': null}).copyWith(
+              tripType: TripType.luarKota,
+              luarKotaCount: counts[0],
+              dalamKotaCount: counts[1]));
       final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
       expect(
           text,
@@ -208,8 +217,12 @@ void main() {
 
   test('PDF retains old trip category without inventing counts', () async {
     for (final type in TripType.values) {
-      final doc =
-          await ReportPdfBuilder.build(report().copyWith(tripType: type));
+      final doc = await ReportPdfBuilder.build(Report.fromMap({
+        ...report().toMap(),
+        'trip_periods': null,
+        'luar_kota_count': null,
+        'dalam_kota_count': null,
+      }).copyWith(tripType: type));
       final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
       expect(text, contains('Total - -'));
       if (type == TripType.unspecified) {
@@ -235,7 +248,7 @@ void main() {
   });
 
   test('multiple extras sum exactly once and round-trip with names', () {
-    final r = report().copyWith(extras: const [
+    final r = report().copyWith(extras: [
       ExtraExpense(name: 'Parkir', amount: 20000),
       ExtraExpense(name: 'Tol', amount: 150000),
       ExtraExpense(name: 'Cuci bus', amount: 50000),
@@ -264,11 +277,11 @@ void main() {
     expect(restored.extras.single.amount, 75000);
     expect(restored.extra, 75000);
     expect(restored.pembayaranTagihan, 40000);
-    expect(restored.totalPengeluaran, 225000);
+    expect(restored.totalPengeluaran, 175000);
     final resaved = Report.fromMap(restored.toMap());
     expect(resaved.extras.single.amount, 75000);
     expect(resaved.pembayaranTagihan, 40000);
-    expect(resaved.totalPengeluaran, 225000);
+    expect(resaved.totalPengeluaran, 175000);
   });
 
   test('malformed extra details fall back to the complete saved total', () {
@@ -304,7 +317,7 @@ void main() {
     expect(Report.fromMap(legacy).namaTamu, isEmpty);
   });
 
-  test('km awal and km akhir persist as manual per-report inputs', () {
+  test('stored kilometer fields still round-trip without form inputs', () {
     final r = report();
     expect(r.kmAwal, 1000);
     expect(r.kmAkhir, 1250);
@@ -368,6 +381,29 @@ void main() {
     expect(text, contains('Pembayaran tagihan Rp 50.000'));
   });
 
+  test('manual meal amount round-trips into PDF expenses and office balance',
+      () async {
+    for (final amount in [0, 100000, 123456]) {
+      final manual = report().copyWith(
+          uangMakan: amount,
+          uangMakanIsManual: true,
+          hasGuestAllowance: true,
+          guestUangSaku: 200000,
+          guestTol: 10000);
+      final reopened = Report.fromMap(manual.toMap());
+      expect(reopened.uangMakanIsManual, isTrue);
+      expect(reopened.copyWith(tripPeriods: []).uangMakan, amount);
+      final doc = await ReportPdfBuilder.build(reopened);
+      final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
+      expect(text, contains('Uang Makan ${formatNumberId(amount)}'));
+      expect(text,
+          contains('Total Pengeluaran ${formatNumberId(650000 + amount)}'));
+      expect(text, contains('SISA ${formatRupiah(350000 - amount)}'));
+      expect(text, contains('Pembayaran tagihan Rp 50.000'));
+      expect(text, contains('SISA DISCOVA Rp 190.000'));
+    }
+  });
+
   test('PDF paginates many extras without dropping entries', () async {
     final r = report().copyWith(extras: [
       for (var i = 0; i < 80; i++)
@@ -391,8 +427,7 @@ void main() {
     expect(r.extra, 80000);
   });
 
-  test('PDF contains manual KM and receipts without calculated distance',
-      () async {
+  test('PDF retains receipts but omits time and kilometer output', () async {
     final logo =
         (await rootBundle.load('assets/logo.png')).buffer.asUint8List();
     final doc = await ReportPdfBuilder.build(report(),
@@ -420,8 +455,10 @@ void main() {
       }
     }
     final content = streams.join('\n');
-    expect(content, contains('Awal'));
-    expect(content, contains('Akhir'));
+    expect(content, isNot(contains('Awal')));
+    expect(content, isNot(contains('Akhir')));
+    expect(content, isNot(contains('Jam')));
+    expect(content, isNot(contains('08:00')));
     expect(attachmentPageContent, hasLength(2));
     expect(
       attachmentPageContent.every((page) => page.contains('Lampiran')),
@@ -429,8 +466,8 @@ void main() {
     );
     expect(content, isNot(contains('Struk Pembelian Bensin')));
     expect(content, isNot(contains('Bensin')));
-    expect(content, contains('1.000'));
-    expect(content, contains('1.250'));
+    expect(content, isNot(contains('(1.000)')));
+    expect(content, isNot(contains('(1.250)')));
     expect(content, isNot(contains('Jarak')));
     expect(content, isNot(contains('Tempuh')));
     final output = Platform.environment['PDF_TEST_OUTPUT'];

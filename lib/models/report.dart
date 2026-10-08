@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'trip_period.dart';
 
@@ -9,12 +10,21 @@ export 'trip_period.dart';
 /// Extra selalu berupa daftar berpasangan nama-harga agar setiap
 /// pengeluaran tercatat rinci, bukan satu angka gabungan.
 class ExtraExpense {
+  final String id;
   final String name;
   final int amount;
 
-  const ExtraExpense({required this.name, required this.amount});
+  ExtraExpense({String? id, required this.name, required this.amount})
+      : id = id ?? createId();
 
-  Map<String, dynamic> toMap() => {'name': name, 'amount': amount};
+  static final _random = Random.secure();
+  static String createId() =>
+      base64UrlEncode(List<int>.generate(16, (_) => _random.nextInt(256)));
+
+  ExtraExpense copyWith({String? name, int? amount}) => ExtraExpense(
+      id: id, name: name ?? this.name, amount: amount ?? this.amount);
+
+  Map<String, dynamic> toMap() => {'id': id, 'name': name, 'amount': amount};
 
   factory ExtraExpense.fromMap(Map<String, dynamic> map) {
     final name = map['name'];
@@ -22,7 +32,11 @@ class ExtraExpense {
     if (name is! String || amount is! int) {
       throw const FormatException('Invalid extra expense');
     }
-    return ExtraExpense(name: name.trim(), amount: amount);
+    final id = map['id'];
+    if (id != null && (id is! String || id.isEmpty)) {
+      throw const FormatException('Invalid extra identity');
+    }
+    return ExtraExpense(id: id as String?, name: name.trim(), amount: amount);
   }
 }
 
@@ -74,7 +88,16 @@ class Report {
   // --- Keuangan ---
   int uangSaku;
   int bbm;
-  int uangMakan;
+  static const mealAllowancePerDay = 50000;
+  static int countMealDays(Iterable<TripPeriod> periods) =>
+      periods.fold(0, (sum, period) => sum + period.days);
+  static int automaticMealAllowance(Iterable<TripPeriod> periods) =>
+      mealAllowancePerDay * countMealDays(periods);
+
+  int get mealDays => countMealDays(tripPeriods ?? const <TripPeriod>[]);
+  final int uangMakan;
+  // Explicit because a manually entered amount can equal the automatic amount.
+  final bool uangMakanIsManual;
   int pembayaranTagihan;
 
   /// Daftar pengeluaran extra, masing-masing bernama dan berharga.
@@ -110,7 +133,8 @@ class Report {
     required this.kmAkhir,
     required this.uangSaku,
     required this.bbm,
-    required this.uangMakan,
+    int? uangMakan,
+    this.uangMakanIsManual = false,
     required this.pembayaranTagihan,
     required this.namaCrew,
     this.catatan = '',
@@ -144,6 +168,9 @@ class Report {
             : tripPeriods == null
                 ? null
                 : List.unmodifiable(tripPeriods),
+        uangMakan = uangMakanIsManual
+            ? uangMakan ?? 0
+            : automaticMealAllowance(resetTripData ? [] : tripPeriods ?? []),
         tanggalBuat = tanggalBuat ?? DateTime.now(),
         extras = List.unmodifiable(extras ?? const <ExtraExpense>[]),
         guestExtras = List.unmodifiable(guestExtras ?? const <ExtraExpense>[]);
@@ -201,6 +228,7 @@ class Report {
       'uang_saku': uangSaku,
       'bbm': bbm,
       'uang_makan': uangMakan,
+      'uang_makan_manual': uangMakanIsManual ? 1 : 0,
       'extra': extra,
       'extra_details': jsonEncode([for (final item in extras) item.toMap()]),
       'pembayaran_tagihan': pembayaranTagihan,
@@ -238,6 +266,7 @@ class Report {
       uangSaku: map['uang_saku'] as int? ?? 0,
       bbm: map['bbm'] as int? ?? 0,
       uangMakan: map['uang_makan'] as int? ?? 0,
+      uangMakanIsManual: map['uang_makan_manual'] == 1,
       pembayaranTagihan: map['pembayaran_tagihan'] as int? ?? 0,
       extras: _extrasFromMap(map),
       namaCrew: map['nama_crew'] as String? ?? '',
@@ -343,6 +372,7 @@ class Report {
     int? uangSaku,
     int? bbm,
     int? uangMakan,
+    bool? uangMakanIsManual,
     int? pembayaranTagihan,
     List<ExtraExpense>? extras,
     String? namaCrew,
@@ -375,6 +405,7 @@ class Report {
       uangSaku: uangSaku ?? this.uangSaku,
       bbm: bbm ?? this.bbm,
       uangMakan: uangMakan ?? this.uangMakan,
+      uangMakanIsManual: uangMakanIsManual ?? this.uangMakanIsManual,
       pembayaranTagihan: pembayaranTagihan ?? this.pembayaranTagihan,
       extras: extras ?? this.extras,
       namaCrew: namaCrew ?? this.namaCrew,

@@ -43,24 +43,30 @@ class SectionHeading extends StatelessWidget {
   final String title;
   final String? subtitle;
   final IconData? icon;
+  final bool compact;
   const SectionHeading(
-      {super.key, required this.title, this.subtitle, this.icon});
+      {super.key,
+      required this.title,
+      this.subtitle,
+      this.icon,
+      this.compact = false});
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 20),
+        padding: EdgeInsets.only(bottom: compact ? 12 : 20),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (icon != null) ...[
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: EdgeInsets.all(compact ? 8 : 10),
                 decoration: BoxDecoration(
                     color: AppColors.canvas,
                     borderRadius: BorderRadius.circular(12)),
-                child: Icon(icon, size: 22, color: AppColors.brand),
+                child:
+                    Icon(icon, size: compact ? 20 : 22, color: AppColors.brand),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: compact ? 8 : 12),
             ],
             Expanded(
               child: Column(
@@ -155,7 +161,11 @@ class EmptyMessage extends StatelessWidget {
 
 class BottomActionBar extends StatelessWidget {
   final Widget child;
-  const BottomActionBar({super.key, required this.child});
+  final EdgeInsetsGeometry padding;
+  const BottomActionBar(
+      {super.key,
+      required this.child,
+      this.padding = const EdgeInsets.fromLTRB(20, 12, 20, 12)});
 
   @override
   Widget build(BuildContext context) => Container(
@@ -166,7 +176,7 @@ class BottomActionBar extends StatelessWidget {
           top: false,
           child: ContentWidth(
             child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                padding: padding,
                 child: SizedBox(width: double.infinity, child: child)),
           ),
         ),

@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:happy_bus_crew/models/report.dart';
+import 'package:happy_bus_crew/models/report_attachment.dart';
 import 'package:happy_bus_crew/services/report_storage.dart';
 import 'package:sqflite/sqflite.dart';
 
@@ -13,6 +14,8 @@ void main() {
   final savedPaths = <String>[];
   var failAttachmentInsert = false;
   var reportInserts = 0;
+  ReportAttachment photo(File file) => ReportAttachment(
+      filePath: file.path, owner: const ExpenseOwner(ExpenseType.officeBbm));
 
   Report report({int? id}) => Report(
         id: id,
@@ -27,7 +30,6 @@ void main() {
         kmAkhir: 20,
         uangSaku: 100,
         bbm: 20,
-        uangMakan: 0,
         pembayaranTagihan: 0,
         namaCrew: 'Budi',
       );
@@ -93,7 +95,8 @@ void main() {
         .writeAsString('first receipt');
     final second = await File('${temporary.path}/struk_2.jpg')
         .writeAsString('second receipt');
-    final id = await ReportStorage.save(report(id: 7), [second, first]);
+    final id =
+        await ReportStorage.save(report(id: 7), [photo(second), photo(first)]);
     expect(id, 7);
     expect(await first.readAsString(), 'first receipt');
     expect(await second.readAsString(), 'second receipt');
@@ -110,8 +113,8 @@ void main() {
     final original =
         await File('${temporary.path}/original.jpg').writeAsString('keep me');
     await expectLater(
-        ReportStorage.save(
-            report(id: 7), [original, File('${temporary.path}/missing.jpg')]),
+        ReportStorage.save(report(id: 7),
+            [photo(original), photo(File('${temporary.path}/missing.jpg'))]),
         throwsA(isA<FileSystemException>()));
     expect(statements, isEmpty);
     expect(await original.readAsString(), 'keep me');
@@ -124,15 +127,15 @@ void main() {
     final original =
         await File('${temporary.path}/original.jpg').writeAsString('keep me');
     failAttachmentInsert = true;
-    await expectLater(
-        ReportStorage.save(report(id: 7), [original]), throwsA(anything));
+    await expectLater(ReportStorage.save(report(id: 7), [photo(original)]),
+        throwsA(anything));
     expect(statements.last, 'ROLLBACK');
     expect(statements, isNot(contains('COMMIT')));
     expect(await original.readAsString(), 'keep me');
     expect(await Directory('${temporary.path}/attachments').list().toList(),
         isEmpty);
     failAttachmentInsert = false;
-    expect(await ReportStorage.save(report(id: 7), [original]), 7);
+    expect(await ReportStorage.save(report(id: 7), [photo(original)]), 7);
     expect(statements.last, 'COMMIT');
   });
 

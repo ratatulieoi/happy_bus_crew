@@ -114,6 +114,45 @@ void main() {
     });
   });
 
+  test(
+      'meals use inclusive period days, not the span, category or stored amount',
+      () {
+    final report = legacyReport().copyWith(tripPeriods: [
+      period(1, 2),
+      period(8, 8, TripType.dalamKota),
+    ], hasGuestAllowance: true, guestUangSaku: 100000, guestTol: 10000);
+    expect(report.mealDays, 3);
+    expect(report.uangMakan, 150000);
+    expect(report.totalPengeluaran, 500000);
+    expect(report.sisa, 500000);
+    expect(report.guestSisa, 90000);
+    expect(report.pembayaranTagihan, 500000);
+    final restored = Report.fromMap({...report.toMap(), 'uang_makan': 999999});
+    expect(restored.uangMakan, 150000);
+    expect(restored.toMap()['uang_makan'], 150000);
+    expect(
+        restored.copyWith(
+            tripPeriods: [period(1, 3, TripType.dalamKota)]).uangMakan,
+        150000);
+    expect(restored.copyWith(tripPeriods: []).uangMakan, 0);
+    expect(legacyReport().uangMakan, 0);
+  });
+
+  test('date overlap includes shared boundaries and ignores time of day', () {
+    expect(
+        TripPeriod.datesOverlap(DateTime(2026, 9, 1), DateTime(2026, 9, 8),
+            DateTime(2026, 9, 3), DateTime(2026, 9, 5)),
+        isTrue);
+    expect(
+        TripPeriod.datesOverlap(DateTime(2026, 9, 1), DateTime(2026, 9, 3, 1),
+            DateTime(2026, 9, 3, 23), DateTime(2026, 9, 5)),
+        isTrue);
+    expect(
+        TripPeriod.datesOverlap(DateTime(2026, 9, 1), DateTime(2026, 9, 2),
+            DateTime(2026, 9, 3), DateTime(2026, 9, 5)),
+        isFalse);
+  });
+
   group('Report period contract', () {
     test('derives counts, preserves finances, and freezes input periods', () {
       final input = [period(1, 2), period(3, 5, TripType.dalamKota)];
@@ -123,8 +162,9 @@ void main() {
       expect(() => original.tripPeriods!.clear(), throwsUnsupportedError);
       expect(original.luarKotaCount, 2);
       expect(original.dalamKotaCount, 3);
-      expect(original.totalPengeluaran, legacyReport().totalPengeluaran);
-      expect(original.sisa, legacyReport().sisa);
+      expect(original.uangMakan, 250000);
+      expect(original.totalPengeluaran, 600000);
+      expect(original.sisa, 400000);
       expect(original.pembayaranTagihan, legacyReport().pembayaranTagihan);
       final restored = Report.fromMap(original.toMap());
       expect(restored.toMap(), original.toMap());
@@ -167,7 +207,8 @@ void main() {
           expect(restored.tripPeriods, isEmpty);
           expect(restored.luarKotaCount, isNull);
           expect(restored.dalamKotaCount, isNull);
-          expect(restored.totalPengeluaran, original.totalPengeluaran);
+          expect(restored.uangMakan, 0);
+          expect(restored.totalPengeluaran, 350000);
         }
       }
     });

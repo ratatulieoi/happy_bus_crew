@@ -2,14 +2,17 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 
 import '../db/database.dart';
+import '../models/bus.dart';
 import '../models/report.dart';
+import '../models/report_attachment.dart';
 import '../services/report_storage.dart';
 import '../ui/app_theme.dart';
 import '../ui/components.dart';
+import '../ui/expense_photo_manager.dart';
+import '../ui/period_range_picker.dart';
 import '../utils/format.dart';
 import 'preview_screen.dart';
 
@@ -23,25 +26,25 @@ class FormScreen extends StatefulWidget {
 
 class _FormScreenState extends State<FormScreen> {
   final _scroll = ScrollController();
-  final _picker = ImagePicker();
-  late final TextEditingController _jam;
-  late final TextEditingController _polisi;
+  String? _selectedPlate;
+  String? _busError;
   late final TextEditingController _namaTamu;
   late final TextEditingController _pengemudi;
   late final TextEditingController _kernet;
-  late final TextEditingController _kmAwal;
-  late final TextEditingController _kmAkhir;
   late final TextEditingController _namaCrew;
   late final TextEditingController _catatan;
   late final TextEditingController _uangSaku;
   late final TextEditingController _bbm;
   late final TextEditingController _uangMakan;
+  late bool _uangMakanIsManual;
   late final TextEditingController _pembayaranTagihan;
   late final TextEditingController _guestUangSaku;
   late final TextEditingController _guestTol;
   late final TextEditingController _guestPenyeberangan;
   late final TextEditingController _guestParkir;
   late final TextEditingController _guestCatatan;
+  final List<String> _extraIds = [];
+  final List<String> _guestExtraIds = [];
   final List<TextEditingController> _extraNames = [];
   final List<TextEditingController> _extraAmounts = [];
   final List<TextEditingController> _guestExtraNames = [];
@@ -53,35 +56,34 @@ class _FormScreenState extends State<FormScreen> {
   late bool _preserveLegacyTripData;
   List<String> _initialPeriods = [];
   String? _periodError;
-  final List<File> _attachments = [];
+  final List<ReportAttachment> _attachments = [];
   List<String> _initialValues = [];
-  List<String> _initialAttachments = [];
+  List<ReportAttachment> _initialAttachments = [];
   bool _loading = true;
   bool _saving = false;
   bool _previewing = false;
-  bool _picking = false;
   bool _allowPop = false;
   String? _loadError;
   int _step = 0;
   bool get _isEdit => widget.report != null;
   List<String> get _stepLabels => _hasGuest
-      ? ['Perjalanan', 'Keuangan', 'Keuangan Tamu', 'Lampiran']
-      : ['Perjalanan', 'Keuangan', 'Lampiran'];
+      ? ['Periode', 'Keuangan Kantor', 'Keuangan Discova', 'Penyelesaian']
+      : ['Periode', 'Keuangan Kantor', 'Penyelesaian'];
   int get _stepCount => _stepLabels.length;
   int get _completionStep => _stepCount - 1;
-  bool get _busy => _saving || _previewing || _picking;
+  bool get _busy => _saving || _previewing;
   List<String> get _currentValues => [
         ..._controllers.map((c) => c.text),
         _hasGuest.toString(),
+        _selectedPlate ?? '',
+        _uangMakanIsManual.toString(),
+        ..._extraIds,
+        ..._guestExtraIds,
       ];
   List<TextEditingController> get _controllers => [
-        _jam,
-        _polisi,
         _namaTamu,
         _pengemudi,
         _kernet,
-        _kmAwal,
-        _kmAkhir,
         _namaCrew,
         _catatan,
         _uangSaku,
@@ -103,10 +105,9 @@ class _FormScreenState extends State<FormScreen> {
       _loadError == null &&
       (!_same(_initialValues, _currentValues) ||
           !_same(_initialPeriods, _periodValues) ||
-          !_same(
-              _initialAttachments, _attachments.map((f) => f.path).toList()));
+          !_same(_initialAttachments, _attachments));
 
-  bool _same(List<String> a, List<String> b) {
+  bool _same<T>(List<T> a, List<T> b) {
     if (a.length != b.length) return false;
     for (var i = 0; i < a.length; i++) {
       if (a[i] != b[i]) return false;
@@ -121,25 +122,26 @@ class _FormScreenState extends State<FormScreen> {
     _preserveLegacyTripData = r == null || r.tripPeriods == null;
     _hasGuest = r?.hasGuestData ?? false;
     for (final period in r?.tripPeriods ?? <TripPeriod>[]) {
-      _periods.add(_TripPeriodDraft(
-          start: period.start, end: period.end, type: period.type));
+      final draft = _TripPeriodDraft(
+          start: period.start,
+          end: period.end,
+          type: period.type,
+          destination: period.destination);
+      draft.destination.addListener(_changed);
+      _periods.add(draft);
     }
     String amount(int? value) =>
         value == null || value == 0 ? '' : formatNumberId(value);
-    _jam = TextEditingController(text: r?.jamBerangkat ?? '');
-    _polisi = TextEditingController(text: r?.noPolisi ?? '');
+    _selectedPlate = r?.noPolisi;
     _namaTamu = TextEditingController(text: r?.namaTamu ?? '');
     _pengemudi = TextEditingController(text: r?.pengemudi ?? '');
     _kernet = TextEditingController(text: r?.kernet ?? '');
-    _kmAwal =
-        TextEditingController(text: r == null ? '' : formatNumberId(r.kmAwal));
-    _kmAkhir =
-        TextEditingController(text: r == null ? '' : formatNumberId(r.kmAkhir));
     _namaCrew = TextEditingController(text: r?.namaCrew ?? '');
     _catatan = TextEditingController(text: r?.catatan ?? '');
     _uangSaku = TextEditingController(text: amount(r?.uangSaku));
     _bbm = TextEditingController(text: amount(r?.bbm));
-    _uangMakan = TextEditingController(text: amount(r?.uangMakan));
+    _uangMakanIsManual = r?.uangMakanIsManual ?? false;
+    _uangMakan = TextEditingController(text: formatNumberId(r?.uangMakan ?? 0));
     _pembayaranTagihan =
         TextEditingController(text: amount(r?.pembayaranTagihan));
     _guestUangSaku = TextEditingController(text: amount(r?.guestUangSaku));
@@ -150,10 +152,12 @@ class _FormScreenState extends State<FormScreen> {
     _guestCatatan = TextEditingController(text: r?.guestCatatan ?? '');
     if (r != null) {
       for (final item in r.extras) {
+        _extraIds.add(item.id);
         _extraNames.add(TextEditingController(text: item.name));
         _extraAmounts.add(TextEditingController(text: amount(item.amount)));
       }
       for (final item in r.guestExtras) {
+        _guestExtraIds.add(item.id);
         _guestExtraNames.add(TextEditingController(text: item.name));
         _guestExtraAmounts
             .add(TextEditingController(text: amount(item.amount)));
@@ -166,10 +170,6 @@ class _FormScreenState extends State<FormScreen> {
   }
 
   void _changed() {
-    // Every shared controller reports here on each keystroke. The period
-    // rows keep their own controllers off this listener: recomputing the
-    // overlap on every keypress would flash the error while a date is
-    // half-typed, so those fields refresh it through onChanged instead.
     if (mounted && !_loading) {
       setState(() {
         _extraError = null;
@@ -178,22 +178,30 @@ class _FormScreenState extends State<FormScreen> {
     }
   }
 
-  int _periodFieldSalt = 0;
-
-  Widget _periodDayField(int index, bool isStart) {
+  Widget _periodRangeField(int index) {
     final period = _periods[index];
-    final label = isStart ? 'Tanggal mulai' : 'Tanggal selesai';
-    return TextFormField(
-      key: ValueKey('${identityHashCode(period)}-$label-$_periodFieldSalt'),
-      initialValue: isStart ? _dayText(period.start) : _dayText(period.end),
-      keyboardType: TextInputType.datetime,
-      decoration: InputDecoration(
-          labelText: label,
-          hintText: 'dd/MM/yyyy',
-          suffixIcon: const Icon(Icons.calendar_today_outlined, size: 20)),
-      onChanged: (value) => _onPeriodDayText(index, isStart, value),
-      onTap: _busy ? null : () => _pickPeriodDay(index, isStart),
-    );
+    final text = period.start == null || period.end == null
+        ? 'Pilih tanggal'
+        : period.start == period.end
+            ? _dayFormat.format(period.start!)
+            : '${_dayFormat.format(period.start!)} - ${_dayFormat.format(period.end!)}';
+    return Builder(
+        builder: (context) => Semantics(
+              button: true,
+              label: 'Tanggal periode ${index + 1}',
+              child: InkWell(
+                key: ValueKey('period-range-$index'),
+                onTap: _busy ? null : () => _pickPeriodRange(context, period),
+                borderRadius: BorderRadius.circular(12),
+                child: InputDecorator(
+                  decoration: const InputDecoration(
+                    labelText: 'Tanggal periode',
+                    suffixIcon: Icon(Icons.date_range_outlined, size: 20),
+                  ),
+                  child: Text(text),
+                ),
+              ),
+            ));
   }
 
   Future<void> _loadInitialData() async {
@@ -203,31 +211,22 @@ class _FormScreenState extends State<FormScreen> {
     });
     try {
       final db = DatabaseHelper.instance;
-      final files = <File>[];
-      if (_isEdit && widget.report!.id != null) {
-        for (final path in await db.getAttachments(widget.report!.id!)) {
-          final file = File(path);
-          if (await file.exists()) files.add(file);
-        }
-      } else if (!_isEdit) {
-        final bus = await db.getSelectedBus();
-        if (bus == null) throw StateError('Tambahkan bus terlebih dahulu.');
-        if (!mounted) return;
-        _polisi.text = bus.plate;
-      }
+      final photos = _isEdit && widget.report!.id != null
+          ? await db.getAttachments(widget.report!.id!)
+          : <ReportAttachment>[];
       if (!mounted) return;
       _attachments
         ..clear()
-        ..addAll(files);
+        ..addAll(photos);
       _initialValues = _currentValues;
       _initialPeriods = _periodValues;
-      _initialAttachments = _attachments.map((f) => f.path).toList();
+      _initialAttachments = List.of(_attachments);
       setState(() => _loading = false);
     } catch (_) {
       if (mounted) {
         setState(() {
           _loading = false;
-          _loadError = 'Data bus atau lampiran gagal dimuat. Coba lagi.';
+          _loadError = 'Lampiran gagal dimuat. Coba lagi.';
         });
       }
     }
@@ -240,6 +239,7 @@ class _FormScreenState extends State<FormScreen> {
       c.dispose();
     }
     for (final period in _periods) {
+      period.destination.removeListener(_changed);
       period.dispose();
     }
     _scroll.dispose();
@@ -271,13 +271,57 @@ class _FormScreenState extends State<FormScreen> {
   }
 
   void _goToStep(int step) {
+    if (step > 0 && !_validateBus()) return;
+    if (step > 0 && !_validatePeriods()) {
+      setState(() => _step = 0);
+      showAppMessage(context, _periodError!);
+      if (_scroll.hasClients) _scroll.jumpTo(0);
+      return;
+    }
     FocusScope.of(context).unfocus();
     setState(() => _step = step);
     if (_scroll.hasClients) _scroll.jumpTo(0);
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Theme(
+      data: theme.copyWith(
+        textTheme: theme.textTheme.copyWith(
+          bodyLarge: theme.textTheme.bodyLarge?.copyWith(fontSize: 14),
+          titleMedium: theme.textTheme.titleMedium?.copyWith(fontSize: 14),
+          headlineMedium:
+              theme.textTheme.headlineMedium?.copyWith(fontSize: 20),
+        ),
+        inputDecorationTheme: theme.inputDecorationTheme.copyWith(
+          contentPadding: const EdgeInsets.all(12),
+          constraints: const BoxConstraints(minHeight: 48),
+        ),
+        materialTapTargetSize: MaterialTapTargetSize.padded,
+        chipTheme: theme.chipTheme.copyWith(
+          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+        ),
+        filledButtonTheme: FilledButtonThemeData(
+          style: theme.filledButtonTheme.style?.copyWith(
+            minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+            padding: const WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+          ),
+        ),
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: theme.outlinedButtonTheme.style?.copyWith(
+            minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
+            padding: const WidgetStatePropertyAll(
+                EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+          ),
+        ),
+      ),
+      child: Builder(builder: _buildForm),
+    );
+  }
+
+  Widget _buildForm(BuildContext context) => PopScope(
         canPop: _allowPop || (!_dirty && !_busy),
         onPopInvokedWithResult: (didPop, result) {
           if (!didPop) _leave();
@@ -315,29 +359,20 @@ class _FormScreenState extends State<FormScreen> {
                       child: ContentWidth(
                           child: ListView(
                         controller: _scroll,
-                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
                         children: [
                           _stepNavigation(),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 16),
                           Text(
                               [
-                                'Detail perjalanan',
-                                'Keuangan perjalanan',
-                                if (_hasGuest) 'Keuangan tamu',
-                                'Lengkapi laporan'
+                                'Periode',
+                                'Keuangan Kantor',
+                                if (_hasGuest) 'Keuangan Discova',
+                                'Penyelesaian'
                               ][_step],
                               style:
                                   Theme.of(context).textTheme.headlineMedium),
-                          const SizedBox(height: 6),
-                          Text(
-                              [
-                                'Jadwal, crew, dan kilometer bus.',
-                                'Uang saku dan pengeluaran.',
-                                if (_hasGuest) 'Uang saku tamu terpisah.',
-                                'Nama pembuat, catatan, dan lampiran.'
-                              ][_step],
-                              style: const TextStyle(color: AppColors.muted)),
-                          const SizedBox(height: 24),
+                          const SizedBox(height: 12),
                           if (_step == 0) ..._tripFields(),
                           if (_step == 1) ..._financeFields(),
                           if (_hasGuest && _step == 2) ..._guestFinanceFields(),
@@ -347,44 +382,49 @@ class _FormScreenState extends State<FormScreen> {
           bottomNavigationBar: _loading || _loadError != null
               ? null
               : BottomActionBar(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                   child: Column(mainAxisSize: MainAxisSize.min, children: [
-                  if (_step == _completionStep) ...[
-                    const Text('Laporan disimpan di perangkat ini.',
-                        style: TextStyle(color: AppColors.muted, fontSize: 12)),
-                    const SizedBox(height: 10),
-                  ],
-                  Row(children: [
-                    if (_step > 0) ...[
-                      OutlinedButton(
-                          onPressed: _busy ? null : () => _goToStep(_step - 1),
-                          child: const Text('Kembali')),
-                      const SizedBox(width: 12)
+                    if (_step == _completionStep) ...[
+                      const Text('Laporan disimpan di perangkat ini.',
+                          style:
+                              TextStyle(color: AppColors.muted, fontSize: 12)),
+                      const SizedBox(height: 10),
                     ],
-                    Expanded(
-                        child: FilledButton.icon(
-                      onPressed: _busy
-                          ? null
-                          : _step < _completionStep
-                              ? _nextStep
-                              : _onSave,
-                      icon: _saving
-                          ? const SizedBox(
-                              width: 18,
-                              height: 18,
-                              child: CircularProgressIndicator(strokeWidth: 2))
-                          : Icon(
-                              _step < _completionStep
-                                  ? Icons.arrow_forward_rounded
-                                  : Icons.check_rounded,
-                              size: 20),
-                      label: Text(_saving
-                          ? 'Menyimpan…'
-                          : _step < _completionStep
-                              ? 'Lanjut'
-                              : 'Simpan laporan'),
-                    )),
-                  ]),
-                ])),
+                    Row(children: [
+                      if (_step > 0) ...[
+                        OutlinedButton(
+                            onPressed:
+                                _busy ? null : () => _goToStep(_step - 1),
+                            child: const Text('Kembali')),
+                        const SizedBox(width: 12)
+                      ],
+                      Expanded(
+                          child: FilledButton.icon(
+                        onPressed: _busy
+                            ? null
+                            : _step < _completionStep
+                                ? _nextStep
+                                : _onSave,
+                        icon: _saving
+                            ? const SizedBox(
+                                width: 18,
+                                height: 18,
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2))
+                            : Icon(
+                                _step < _completionStep
+                                    ? Icons.arrow_forward_rounded
+                                    : Icons.check_rounded,
+                                size: 20),
+                        label: Text(_saving
+                            ? 'Menyimpan…'
+                            : _step < _completionStep
+                                ? 'Lanjut'
+                                : 'Simpan laporan'),
+                      )),
+                    ]),
+                  ])),
         ),
       );
 
@@ -416,52 +456,56 @@ class _FormScreenState extends State<FormScreen> {
       ]);
 
   List<Widget> _tripFields() => [
+        _GuestToggle(
+          value: _hasGuest,
+          onChanged: (value) => setState(() {
+            _hasGuest = value;
+            if (!value && _step > 2) _step = 2;
+          }),
+        ),
+        const SizedBox(height: 12),
         SectionCard(
+            padding: const EdgeInsets.all(16),
             child: Column(children: [
-          const SectionHeading(
-              title: 'Bus & jadwal', icon: Icons.route_outlined),
-          _text(_polisi, 'Nomor polisi',
-              readOnly: true,
-              suffixIcon: const Icon(Icons.lock_outline, size: 18)),
-          const SizedBox(height: 16),
-          _text(_namaTamu, 'Nama tamu', hint: 'Nama tamu atau kelompok'),
-          const SizedBox(height: 8),
-          _GuestToggle(
-            value: _hasGuest,
-            onChanged: (value) => setState(() {
-              _hasGuest = value;
-              if (!value && _step > 2) _step = 2;
-            }),
-          ),
-          const SizedBox(height: 16),
-          _text(_jam, 'Jam berangkat',
-              hint: '08:00',
-              keyboardType: TextInputType.datetime,
-              suffixIcon: IconButton(
-                  onPressed: _pickTime,
-                  tooltip: 'Pilih jam berangkat',
-                  icon: const Icon(Icons.schedule_rounded, size: 20))),
-        ])),
-        const SizedBox(height: 16),
+              const SectionHeading(
+                  title: 'Bus & tamu',
+                  compact: true,
+                  icon: Icons.route_outlined),
+              DropdownButtonFormField<String>(
+                value: _selectedPlate,
+                isExpanded: true,
+                hint: const Text('Pilih bus'),
+                decoration:
+                    InputDecoration(labelText: 'Bus', errorText: _busError),
+                items: [
+                  for (final bus in busCatalog)
+                    DropdownMenuItem(
+                      value: bus.plate,
+                      child: Text('${bus.name} • ${bus.plate}'),
+                    ),
+                ],
+                onChanged: (plate) => setState(() {
+                  _selectedPlate = plate;
+                  _busError = null;
+                }),
+              ),
+              const SizedBox(height: 12),
+              _text(_namaTamu, 'Nama tamu', hint: 'Nama tamu atau kelompok'),
+            ])),
+        const SizedBox(height: 12),
         _periodFields(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         SectionCard(
+            padding: const EdgeInsets.all(16),
             child: Column(children: [
-          const SectionHeading(
-              title: 'Crew bertugas', icon: Icons.people_outline_rounded),
-          _text(_pengemudi, 'Nama pengemudi', hint: 'Nama sopir'),
-          const SizedBox(height: 16),
-          _text(_kernet, 'Nama kernet', hint: 'Nama asisten pengemudi'),
-        ])),
-        const SizedBox(height: 16),
-        SectionCard(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const SectionHeading(title: 'Kilometer', icon: Icons.speed_rounded),
-          AdaptivePair(
-              first: _numberField(_kmAwal, 'KM awal', money: false),
-              second: _numberField(_kmAkhir, 'KM akhir', money: false)),
-        ])),
+              const SectionHeading(
+                  title: 'Crew bertugas',
+                  compact: true,
+                  icon: Icons.people_outline_rounded),
+              _text(_pengemudi, 'Nama pengemudi', hint: 'Nama sopir'),
+              const SizedBox(height: 12),
+              _text(_kernet, 'Nama kernet', hint: 'Nama asisten pengemudi'),
+            ])),
       ];
 
   String get _periodTotals {
@@ -479,22 +523,12 @@ class _FormScreenState extends State<FormScreen> {
 
   static final _spanFormat = DateFormat('EEEE, dd/MM/yyyy', 'id_ID');
 
-  /// The trip span is derived, not typed: the earliest start and latest end
-  /// across the rows. Empty until a first complete row exists.
-  String get _tripSpanText {
-    final start = TripPeriod.spanStart(_completePeriods);
-    final end = TripPeriod.spanEnd(_completePeriods);
-    if (start == null || end == null) return 'Berangkat - Kembali: belum ada.';
-    return 'Berangkat ${_spanFormat.format(start)} - '
-        'Kembali ${_spanFormat.format(end)}.';
-  }
-
   /// Finished rows earn a small quiet pill (16 hari DK); unfinished rows
   /// stay plain text so the count is never confused with the row number.
   Widget _periodTitle(int index) {
     final period = _periods[index];
     final label = 'Periode ${index + 1}';
-    final titleStyle = Theme.of(context).textTheme.titleMedium;
+    const titleStyle = TextStyle(fontSize: 14, fontWeight: FontWeight.w700);
     if (period.start == null || period.end == null || period.type == null) {
       return Text(label, style: titleStyle);
     }
@@ -517,8 +551,10 @@ class _FormScreenState extends State<FormScreen> {
 
   List<String> get _periodValues => [
         if (_preserveLegacyTripData) 'legacy' else 'periods',
-        for (final period in _periods)
+        for (final period in _periods) ...[
           '${period.start?.toIso8601String()}|${period.end?.toIso8601String()}|${period.type?.value}',
+          period.destination.text,
+        ],
       ];
 
   List<TripPeriod> get _completePeriods => [
@@ -528,7 +564,10 @@ class _FormScreenState extends State<FormScreen> {
               !period.end!.isBefore(period.start!) &&
               period.type != null)
             TripPeriod(
-                start: period.start!, end: period.end!, type: period.type!),
+                start: period.start!,
+                end: period.end!,
+                type: period.type!,
+                destination: period.destination.text),
       ];
 
   /// Empty is allowed for now. Otherwise every row needs its own dates and
@@ -547,6 +586,10 @@ class _FormScreenState extends State<FormScreen> {
       }
       if (period.end!.isBefore(period.start!)) {
         setState(() => _periodError = 'Periode ${i + 1}: tanggal terbalik.');
+        return false;
+      }
+      if (!_rangeAvailable(period, period.start!, period.end!)) {
+        setState(() => _periodError = 'Periode bertumpuk.');
         return false;
       }
       if (period.type == null) {
@@ -568,90 +611,102 @@ class _FormScreenState extends State<FormScreen> {
               ? 'Belum dicatat.'
               : '${report.tripType.label}, jumlah belum dicatat.';
       return SectionCard(
+          padding: const EdgeInsets.all(16),
           child:
               Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const SectionHeading(
-            title: 'Periode LK/DK', icon: Icons.date_range_outlined),
-        Text(details),
-        const SizedBox(height: 12),
-        OutlinedButton(
-            onPressed: _busy
-                ? null
-                : () => setState(() {
-                      _preserveLegacyTripData = false;
-                    }),
-            child: const Text('Isi periode')),
-      ]));
+            const SectionHeading(
+                title: 'Periode',
+                compact: true,
+                icon: Icons.date_range_outlined),
+            Text(details),
+            const SizedBox(height: 12),
+            OutlinedButton(
+                onPressed: _busy
+                    ? null
+                    : () => setState(() {
+                          _preserveLegacyTripData = false;
+                        }),
+                child: const Text('Isi periode')),
+          ]));
     }
     return SectionCard(
+        padding: const EdgeInsets.all(16),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      SectionHeading(
-          title: 'Periode LK/DK',
-          subtitle: _periods.isEmpty ? 'Belum ada periode.' : _periodTotals,
-          icon: Icons.date_range_outlined),
-      Text(_tripSpanText, style: const TextStyle(color: AppColors.muted)),
-      const SizedBox(height: 12),
-      for (var i = 0; i < _periods.length; i++) ...[
-        Container(
-          key: ObjectKey(_periods[i]),
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-              color: AppColors.canvas, borderRadius: BorderRadius.circular(12)),
-          child:
-              Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            _periodTitle(i),
-            const SizedBox(height: 12),
-            AdaptivePair(
-              first: _periodDayField(i, true),
-              second: _periodDayField(i, false),
+          SectionHeading(
+              title: 'Periode',
+              compact: true,
+              subtitle: _periods.isEmpty ? 'Belum ada periode.' : _periodTotals,
+              icon: Icons.date_range_outlined),
+          const SizedBox(height: 12),
+          for (var i = 0; i < _periods.length; i++) ...[
+            Container(
+              key: ObjectKey(_periods[i]),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                  color: AppColors.canvas,
+                  borderRadius: BorderRadius.circular(12)),
+              child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _periodTitle(i),
+                    const SizedBox(height: 12),
+                    _periodRangeField(i),
+                    const SizedBox(height: 12),
+                    _text(_periods[i].destination, 'Destinasi'),
+                    const SizedBox(height: 12),
+                    Wrap(spacing: 8, runSpacing: 8, children: [
+                      for (final type in [
+                        TripType.luarKota,
+                        TripType.dalamKota
+                      ])
+                        ChoiceChip(
+                            label:
+                                Text(type == TripType.luarKota ? 'LK' : 'DK'),
+                            selected: _periods[i].type == type,
+                            onSelected: _busy
+                                ? null
+                                : (selected) => setState(() {
+                                      _periods[i].type = selected ? type : null;
+                                      _syncMealAllowance();
+                                      _periodError =
+                                          TripPeriod.validateNoOverlap(
+                                              _completePeriods);
+                                    })),
+                    ]),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Tooltip(
+                        message: 'Hapus periode ${i + 1}',
+                        child: TextButton.icon(
+                            onPressed: _busy ? null : () => _removePeriod(i),
+                            icon: const Icon(Icons.delete_outline_rounded,
+                                size: 18),
+                            label: const Text('Hapus')),
+                      ),
+                    ),
+                  ]),
             ),
             const SizedBox(height: 12),
-            Wrap(spacing: 8, runSpacing: 8, children: [
-              for (final type in [TripType.luarKota, TripType.dalamKota])
-                ChoiceChip(
-                    label: Text(type == TripType.luarKota
-                        ? 'Luar Kota (LK)'
-                        : 'Dalam Kota (DK)'),
-                    selected: _periods[i].type == type,
-                    onSelected: _busy
-                        ? null
-                        : (selected) => setState(() {
-                              _periods[i].type = selected ? type : null;
-                              _periodError = TripPeriod.validateNoOverlap(
-                                  _completePeriods);
-                            })),
-            ]),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Tooltip(
-                message: 'Hapus periode ${i + 1}',
-                child: TextButton.icon(
-                    onPressed: _busy ? null : () => _removePeriod(i),
-                    icon: const Icon(Icons.delete_outline_rounded, size: 18),
-                    label: const Text('Hapus')),
-              ),
-            ),
-          ]),
-        ),
-        const SizedBox(height: 12),
-      ],
-      if (_periodError != null) ...[
-        Text(_periodError!,
-            style: const TextStyle(color: AppColors.danger, fontSize: 12)),
-        const SizedBox(height: 12),
-      ],
-      OutlinedButton.icon(
-        onPressed: _busy ? null : _addPeriod,
-        icon: const Icon(Icons.add_rounded, size: 20),
-        label: const Text('Tambah periode'),
-      ),
-    ]));
+          ],
+          if (_periodError != null) ...[
+            Text(_periodError!,
+                style: const TextStyle(color: AppColors.danger, fontSize: 12)),
+            const SizedBox(height: 12),
+          ],
+          OutlinedButton.icon(
+            onPressed: _busy ? null : _addPeriod,
+            icon: const Icon(Icons.add_rounded, size: 20),
+            label: const Text('Tambah periode'),
+          ),
+        ]));
   }
 
   void _addPeriod() {
+    final period = _TripPeriodDraft();
+    period.destination.addListener(_changed);
     setState(() {
       _preserveLegacyTripData = false;
-      _periods.add(_TripPeriodDraft());
+      _periods.add(period);
       _periodError = null;
     });
   }
@@ -659,8 +714,10 @@ class _FormScreenState extends State<FormScreen> {
   void _removePeriod(int index) {
     FocusScope.of(context).unfocus();
     final removed = _periods[index];
+    removed.destination.removeListener(_changed);
     setState(() {
       _periods.removeAt(index);
+      _syncMealAllowance();
       _periodError = null;
     });
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -675,130 +732,127 @@ class _FormScreenState extends State<FormScreen> {
 
   static final _dayFormat = DateFormat('dd/MM/yyyy', 'id_ID');
 
-  String _dayText(DateTime? day) => day == null ? '' : _dayFormat.format(day);
+  bool _rangeAvailable(_TripPeriodDraft edited, DateTime start, DateTime end) =>
+      !end.isBefore(start) &&
+      !_periods.any((other) =>
+          !identical(other, edited) &&
+          other.start != null &&
+          other.end != null &&
+          TripPeriod.datesOverlap(start, end, other.start!, other.end!));
 
-  void _setPeriodDay(int index, bool isStart, DateTime day) {
-    final period = _periods[index];
-    if (isStart) {
-      period.start = day;
-    } else {
-      period.end = day;
-    }
-    // Remount the row's fields so the fresh ones show the picked day; the
-    // salt in the key below forces new state with the formatted value.
-    _periodFieldSalt++;
-    if (mounted && !_loading) {
-      setState(() {
-        _periodError = TripPeriod.validateNoOverlap(_completePeriods);
-      });
-    }
-  }
-
-  void _onPeriodDayText(int index, bool isStart, String value) {
-    final parsed = _parseDayInput(value);
-    final period = _periods[index];
-    if (isStart) {
-      period.start = parsed;
-    } else {
-      period.end = parsed;
-    }
-    if (mounted && !_loading) {
-      setState(() {
-        _periodError = TripPeriod.validateNoOverlap(_completePeriods);
-      });
-    }
-  }
-
-  DateTime? _parseDayInput(String value) {
-    try {
-      return _dayFormat.parseStrict(value.trim());
-    } on FormatException {
-      return null;
-    }
-  }
-
-  Future<void> _pickPeriodDay(int index, bool isStart) async {
-    final period = _periods[index];
+  Future<void> _pickPeriodRange(
+      BuildContext context, _TripPeriodDraft period) async {
     final now = DateTime.now();
-    final current = isStart ? period.start : period.end;
-    final picked = await showDatePicker(
-        context: context,
-        initialDate: current ?? now,
-        firstDate: DateTime(2020),
-        lastDate: DateTime(now.year + 10, 12, 31),
-        locale: const Locale('id', 'ID'));
-    if (picked != null && mounted) {
-      _setPeriodDay(index, isStart, picked);
+    final firstDate = DateTime(2020);
+    final lastDate = DateTime(now.year + 10, 12, 31);
+    final initial = period.start != null &&
+            period.end != null &&
+            _rangeAvailable(period, period.start!, period.end!)
+        ? DateTimeRange(start: period.start!, end: period.end!)
+        : null;
+    // Flutter's showDateRangePicker keeps Pilih disabled after the first tap
+    // and exposes no selection callbacks. This dialog accepts that tap as a
+    // complete one-day range while still allowing a second date to extend it.
+    final picked = await showDialog<DateTimeRange>(
+      context: context,
+      builder: (_) => PeriodRangePickerDialog(
+        initialDateRange: initial,
+        firstDate: firstDate,
+        lastDate: lastDate,
+        rangeAvailable: (start, end) => _rangeAvailable(period, start, end),
+      ),
+    );
+    if (!mounted || picked == null || !_periods.contains(period)) return;
+    if (picked.start.isBefore(firstDate) ||
+        picked.end.isAfter(lastDate) ||
+        !_rangeAvailable(period, picked.start, picked.end)) {
+      setState(() => _periodError = 'Periode bertumpuk.');
+      return;
+    }
+    setState(() {
+      period.start = picked.start;
+      period.end = picked.end;
+      _syncMealAllowance();
+      _periodError = null;
+    });
+  }
+
+  void _syncMealAllowance() {
+    if (!_uangMakanIsManual) {
+      _uangMakan.text =
+          formatNumberId(Report.automaticMealAllowance(_completePeriods));
     }
   }
 
   List<Widget> _financeFields() => [
         SectionCard(
+            padding: const EdgeInsets.all(16),
             child: Column(children: [
-          const SectionHeading(
-              title: 'Uang diterima',
-              subtitle: 'Uang saku diterima dari kantor.',
-              icon: Icons.account_balance_wallet_outlined),
-          _numberField(_uangSaku, 'Uang saku'),
-        ])),
-        const SizedBox(height: 16),
+              const SectionHeading(
+                  title: 'Uang diterima',
+                  compact: true,
+                  icon: Icons.account_balance_wallet_outlined),
+              _numberField(_uangSaku, 'Uang saku'),
+            ])),
+        const SizedBox(height: 12),
         SectionCard(
+            padding: const EdgeInsets.all(16),
             child: Column(children: [
-          const SectionHeading(
-              title: 'Rincian pengeluaran',
-              subtitle: 'Kosongkan jika tidak ada.',
-              icon: Icons.receipt_long_outlined),
-          _numberField(_bbm, 'BBM'),
-          const SizedBox(height: 16),
-          _numberField(_uangMakan, 'Uang makan'),
-          const SizedBox(height: 16),
-          ..._extraFields(),
-        ])),
-        const SizedBox(height: 16),
+              const SectionHeading(
+                  title: 'Rincian pengeluaran',
+                  compact: true,
+                  icon: Icons.receipt_long_outlined),
+              _expenseField(
+                  _bbm, 'BBM', const ExpenseOwner(ExpenseType.officeBbm)),
+              const SizedBox(height: 12),
+              _expenseField(
+                  _uangMakan,
+                  'Uang makan (${Report.countMealDays(_completePeriods)} hari)',
+                  const ExpenseOwner(ExpenseType.officeMeal),
+                  onChanged: (_) => setState(() => _uangMakanIsManual = true)),
+              const SizedBox(height: 12),
+              ..._extraFields(),
+            ])),
+        const SizedBox(height: 12),
         SectionCard(
+            padding: const EdgeInsets.all(16),
             child: Column(children: [
-          const SectionHeading(
-              title: 'Pembayaran tagihan',
-              subtitle: 'Titipan pembayaran pelunasan bus dari tamu jika ada.',
-              icon: Icons.payments_outlined),
-          _numberField(_pembayaranTagihan, 'Pembayaran tagihan'),
-        ])),
-        const SizedBox(height: 16),
+              const SectionHeading(
+                  title: 'Pembayaran tagihan',
+                  compact: true,
+                  subtitle: 'Titipan pelunasan bus dari tamu.',
+                  icon: Icons.payments_outlined),
+              _numberField(_pembayaranTagihan, 'Pembayaran tagihan'),
+            ])),
+        const SizedBox(height: 12),
         _balanceCard(),
       ];
 
   List<Widget> _guestFinanceFields() => [
         _guestAllowanceCard(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         _guestExpensesCard(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         _guestBalanceCard(),
       ];
 
   List<Widget> _completionFields() => [
         SectionCard(
+            padding: const EdgeInsets.all(16),
             child: Column(children: [
-          const SectionHeading(
-              title: 'Pembuat laporan',
-              subtitle: 'Nama untuk tanda tangan PDF.',
-              icon: Icons.draw_outlined),
-          _text(_namaCrew, 'Nama crew', hint: 'Nama lengkap pembuat laporan'),
-          const SizedBox(height: 16),
-          _text(_catatan, 'Catatan tambahan', hint: 'Opsional', maxLines: 3),
-        ])),
-        const SizedBox(height: 16),
-        SectionCard(
-            child:
-                Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          SectionHeading(
-              title: 'Lampiran',
-              subtitle: '${_attachments.length} gambar dilampirkan.',
-              icon: Icons.photo_library_outlined),
-          _attachmentSection(),
-        ])),
-        const SizedBox(height: 16),
+              const SectionHeading(
+                  title: 'Pembuat laporan',
+                  compact: true,
+                  icon: Icons.draw_outlined),
+              _text(_namaCrew, 'Nama crew',
+                  hint: 'Nama lengkap pembuat laporan'),
+              const SizedBox(height: 12),
+              _text(_catatan, 'Catatan tambahan',
+                  hint: 'Opsional', maxLines: 3),
+            ])),
+        const SizedBox(height: 12),
         _balanceCard(),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
         OutlinedButton.icon(
             onPressed: _busy ? null : _onPreview,
             icon: _previewing
@@ -815,55 +869,27 @@ class _FormScreenState extends State<FormScreen> {
       ];
 
   Widget _text(TextEditingController controller, String label,
-          {String? hint,
-          bool readOnly = false,
-          int maxLines = 1,
-          TextInputType? keyboardType,
-          Widget? suffixIcon}) =>
+          {String? hint, int maxLines = 1}) =>
       TextFormField(
         controller: controller,
-        readOnly: readOnly,
         maxLines: maxLines,
-        keyboardType: keyboardType,
-        textCapitalization: keyboardType == null
-            ? TextCapitalization.words
-            : TextCapitalization.none,
+        textCapitalization: TextCapitalization.words,
         textInputAction:
             maxLines > 1 ? TextInputAction.newline : TextInputAction.next,
-        decoration: InputDecoration(
-            labelText: label, hintText: hint, suffixIcon: suffixIcon),
+        decoration: InputDecoration(labelText: label, hintText: hint),
       );
 
   Widget _numberField(TextEditingController controller, String label,
-          {bool money = true}) =>
+          {ValueChanged<String>? onChanged}) =>
       TextFormField(
         controller: controller,
+        onChanged: onChanged,
         keyboardType: TextInputType.number,
         textInputAction: TextInputAction.next,
         inputFormatters: [ThousandsSeparatorFormatter()],
-        decoration: InputDecoration(
-            labelText: label,
-            hintText: '0',
-            prefixText: money ? 'Rp ' : null,
-            suffixText: money ? null : 'km'),
+        decoration:
+            InputDecoration(labelText: label, hintText: '0', prefixText: 'Rp '),
       );
-
-  Future<void> _pickTime() async {
-    final parts = _jam.text.split(':');
-    final hour = int.tryParse(parts.first) ?? 8;
-    final minute = parts.length == 2 ? int.tryParse(parts.last) ?? 0 : 0;
-    final picked = await showTimePicker(
-        context: context,
-        initialTime:
-            TimeOfDay(hour: hour.clamp(0, 23), minute: minute.clamp(0, 59)),
-        builder: (context, child) => MediaQuery(
-            data: MediaQuery.of(context).copyWith(alwaysUse24HourFormat: true),
-            child: child!));
-    if (picked != null && mounted) {
-      _jam.text =
-          '${picked.hour.toString().padLeft(2, '0')}:${picked.minute.toString().padLeft(2, '0')}';
-    }
-  }
 
   Widget _summaryRow(String label, String value) => Wrap(
         spacing: 16,
@@ -881,62 +907,60 @@ class _FormScreenState extends State<FormScreen> {
     final color = deficit ? AppColors.danger : AppColors.success;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
           color: deficit ? AppColors.dangerSoft : AppColors.successSoft,
           borderRadius: BorderRadius.circular(20)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         _summaryRow('Uang saku', formatRupiah(report.uangSaku)),
         const SizedBox(height: 8),
+        _summaryRow('Uang makan (${report.mealDays} hari)',
+            formatRupiah(report.uangMakan)),
+        const SizedBox(height: 8),
         _summaryRow('Total pengeluaran', formatRupiah(report.totalPengeluaran)),
-        const Divider(height: 28),
-        Text(deficit ? 'Defisit perjalanan' : 'Sisa uang perjalanan',
+        const Divider(height: 20),
+        Text(deficit ? 'Defisit kantor' : 'Sisa uang kantor',
             style: TextStyle(color: color, fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
         Text(formatRupiah(report.sisa),
             style: TextStyle(
                 color: color,
-                fontSize: 28,
+                fontSize: 22,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -.5)),
-        const SizedBox(height: 6),
-        Text(
-            deficit
-                ? 'Pengeluaran melebihi uang saku.'
-                : 'Uang saku dikurangi pengeluaran.',
-            style: TextStyle(color: color, fontSize: 12)),
       ]),
     );
   }
 
-  String get _guestNameSuffix {
-    final name = _namaTamu.text.trim();
-    return name.isEmpty ? '' : ' $name';
-  }
-
   Widget _guestAllowanceCard() => SectionCard(
-          child: Column(children: [
-        SectionHeading(
-            title: 'Uang saku tamu$_guestNameSuffix',
-            subtitle: 'Uang saku tamu diterima, terpisah dari kas utama.',
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        const SectionHeading(
+            title: 'Uang saku Discova',
+            compact: true,
             icon: Icons.account_balance_wallet_outlined),
         _numberField(_guestUangSaku, 'Uang saku diterima'),
       ]));
 
   Widget _guestExpensesCard() => SectionCard(
-          child: Column(children: [
-        SectionHeading(
-            title: 'Pengeluaran tamu$_guestNameSuffix',
+      padding: const EdgeInsets.all(16),
+      child: Column(children: [
+        const SectionHeading(
+            title: 'Pengeluaran Discova',
+            compact: true,
             icon: Icons.receipt_long_outlined),
-        _numberField(_guestTol, 'Tol'),
-        const SizedBox(height: 16),
-        _numberField(_guestPenyeberangan, 'Penyeberangan'),
-        const SizedBox(height: 16),
-        _numberField(_guestParkir, 'Parkir'),
-        const SizedBox(height: 16),
+        _expenseField(
+            _guestTol, 'Tol', const ExpenseOwner(ExpenseType.discovaTol)),
+        const SizedBox(height: 12),
+        _expenseField(_guestPenyeberangan, 'Penyeberangan',
+            const ExpenseOwner(ExpenseType.discovaCrossing)),
+        const SizedBox(height: 12),
+        _expenseField(_guestParkir, 'Parkir',
+            const ExpenseOwner(ExpenseType.discovaParking)),
+        const SizedBox(height: 12),
         ..._guestExtraFields(),
-        const SizedBox(height: 16),
-        _text(_guestCatatan, 'Catatan tamu', hint: 'Opsional', maxLines: 3),
+        const SizedBox(height: 12),
+        _text(_guestCatatan, 'Catatan Discova', hint: 'Opsional', maxLines: 3),
       ]));
 
   List<Widget> _guestExtraFields() => [
@@ -948,9 +972,16 @@ class _FormScreenState extends State<FormScreen> {
                 color: AppColors.canvas,
                 borderRadius: BorderRadius.circular(12)),
             child: Column(children: [
-              _text(_guestExtraNames[i], 'Nama extra tamu ${i + 1}'),
+              _text(_guestExtraNames[i], 'Nama extra Discova ${i + 1}'),
               const SizedBox(height: 12),
-              _numberField(_guestExtraAmounts[i], 'Harga extra tamu ${i + 1}'),
+              _expenseField(
+                  _guestExtraAmounts[i],
+                  'Harga extra Discova ${i + 1}',
+                  ExpenseOwner(ExpenseType.discovaExtra,
+                      extraId: _guestExtraIds[i]),
+                  photoLabel: _guestExtraNames[i].text.trim().isEmpty
+                      ? 'Extra Discova ${i + 1}'
+                      : '${_guestExtraNames[i].text.trim()} • Discova'),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
@@ -974,7 +1005,7 @@ class _FormScreenState extends State<FormScreen> {
         OutlinedButton.icon(
           onPressed: _busy ? null : _addGuestExtra,
           icon: const Icon(Icons.add_rounded, size: 20),
-          label: const Text('Tambah Extra tamu'),
+          label: const Text('Tambah Extra Discova'),
         ),
       ];
 
@@ -984,159 +1015,108 @@ class _FormScreenState extends State<FormScreen> {
     final color = deficit ? AppColors.danger : AppColors.success;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
           color: deficit ? AppColors.dangerSoft : AppColors.successSoft,
           borderRadius: BorderRadius.circular(20)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        _summaryRow('Uang saku tamu', formatRupiah(report.guestUangSaku)),
+        _summaryRow('Uang saku Discova', formatRupiah(report.guestUangSaku)),
         const SizedBox(height: 8),
-        _summaryRow('Total pengeluaran tamu',
+        _summaryRow('Total pengeluaran Discova',
             formatRupiah(report.guestTotalPengeluaran)),
-        const Divider(height: 28),
-        Text(
-            deficit
-                ? 'Defisit uang tamu$_guestNameSuffix'
-                : 'Sisa uang tamu$_guestNameSuffix',
+        const Divider(height: 20),
+        Text(deficit ? 'Defisit uang Discova' : 'Sisa uang Discova',
             style: TextStyle(color: color, fontWeight: FontWeight.w600)),
         const SizedBox(height: 6),
         Text(formatRupiah(report.guestSisa),
             style: TextStyle(
                 color: color,
-                fontSize: 28,
+                fontSize: 22,
                 fontWeight: FontWeight.w800,
                 letterSpacing: -.5)),
-        const SizedBox(height: 6),
-        Text(
-            deficit
-                ? 'Pengeluaran tamu melebihi uang saku tamu.'
-                : 'Uang saku tamu dikurangi pengeluaran tamu.',
-            style: TextStyle(color: color, fontSize: 12)),
       ]),
     );
   }
 
-  Widget _attachmentSection() => Column(children: [
-        if (_attachments.isEmpty)
-          Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(24),
-              decoration: BoxDecoration(
-                  color: AppColors.canvas,
-                  borderRadius: BorderRadius.circular(12)),
-              child: const Column(children: [
-                Icon(Icons.add_photo_alternate_outlined,
-                    size: 32, color: AppColors.muted),
-                SizedBox(height: 10),
-                Text('Belum ada lampiran',
-                    style: TextStyle(fontWeight: FontWeight.w600)),
-              ]))
-        else
-          SizedBox(
-              height: 156,
-              child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _attachments.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
-                  itemBuilder: (context, i) => SizedBox(
-                      width: 128,
-                      child: Stack(fit: StackFit.expand, children: [
-                        ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.file(_attachments[i],
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const ColoredBox(
-                                    color: AppColors.canvas,
-                                    child: Center(
-                                        child: Icon(
-                                            Icons.broken_image_outlined))))),
-                        Positioned(
-                            bottom: 8,
-                            left: 8,
-                            child: Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                    color: AppColors.ink,
-                                    borderRadius: BorderRadius.circular(6)),
-                                child: Text('Lampiran ${i + 1}',
-                                    style: const TextStyle(
-                                        color: Colors.white, fontSize: 11)))),
-                        Positioned(
-                            top: 0,
-                            right: 0,
-                            child: IconButton.filled(
-                                tooltip: 'Hapus lampiran ${i + 1}',
-                                style: IconButton.styleFrom(
-                                    backgroundColor: AppColors.ink,
-                                    foregroundColor: Colors.white),
-                                onPressed: () =>
-                                    setState(() => _attachments.removeAt(i)),
-                                icon:
-                                    const Icon(Icons.close_rounded, size: 18))),
-                      ])))),
-        const SizedBox(height: 16),
-        // Camera capture is unsupported on Linux; gallery stays available.
-        if (!Platform.isLinux)
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-                onPressed: () => _pickImage(ImageSource.camera),
-                icon: const Icon(Icons.camera_alt_outlined, size: 20),
-                label: const Text('Kamera')),
-          ),
-        if (!Platform.isLinux) const SizedBox(height: 12),
-        SizedBox(
-          width: double.infinity,
-          child: OutlinedButton.icon(
-              onPressed: () => _pickImage(ImageSource.gallery),
-              icon: const Icon(Icons.photo_library_outlined, size: 20),
-              label: const Text('Galeri')),
+  Widget _expenseField(
+      TextEditingController controller, String label, ExpenseOwner owner,
+      {String? photoLabel, ValueChanged<String>? onChanged}) {
+    final count = _attachments.where((photo) => photo.owner == owner).length;
+    final title = photoLabel ?? label;
+    return Row(children: [
+      Expanded(child: _numberField(controller, label, onChanged: onChanged)),
+      const SizedBox(width: 8),
+      Tooltip(
+        message: 'Foto $title',
+        child: OutlinedButton.icon(
+          key: ValueKey(owner),
+          style: OutlinedButton.styleFrom(
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              minimumSize: const Size(48, 48)),
+          onPressed: _busy ? null : () => _managePhotos(owner, title),
+          icon: Icon(
+              count == 0
+                  ? Icons.add_photo_alternate_outlined
+                  : Icons.photo_library_outlined,
+              size: 20),
+          label: Text(count == 0 ? '+' : '$count'),
         ),
-        if (_picking)
-          const Padding(
-              padding: EdgeInsets.only(top: 12),
-              child: LinearProgressIndicator()),
-      ]);
+      ),
+    ]);
+  }
 
-  Future<void> _pickImage(ImageSource source) async {
-    if (_busy) return;
-    setState(() => _picking = true);
-    try {
-      final List<XFile> picked;
-      if (source == ImageSource.gallery) {
-        picked = await _picker.pickMultiImage(imageQuality: 85);
-      } else {
-        final image = await _picker.pickImage(source: source, imageQuality: 85);
-        picked = image == null ? [] : [image];
-      }
-      if (mounted) {
-        setState(
-            () => _attachments.addAll(picked.map((image) => File(image.path))));
-      }
-    } catch (_) {
-      if (mounted) {
-        showAppMessage(context,
-            'Foto belum dapat diambil. Periksa izin kamera atau galeri.');
-      }
-    } finally {
-      if (mounted) setState(() => _picking = false);
-    }
+  Future<void> _managePhotos(ExpenseOwner owner, String label) async {
+    FocusScope.of(context).unfocus();
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => ExpensePhotoManager(
+        owner: owner,
+        label: label,
+        photos: _attachments.where((photo) => photo.owner == owner).toList(),
+        onChanged: (photos) {
+          if (!mounted) return;
+          setState(() {
+            // Preserve the report-wide order used by the generic PDF appendix.
+            final remaining = List<ReportAttachment>.of(photos);
+            _attachments.removeWhere(
+                (photo) => photo.owner == owner && !remaining.remove(photo));
+            _attachments.addAll(remaining);
+          });
+        },
+      ),
+    );
+  }
+
+  Future<bool> _confirmExtraRemoval(ExpenseOwner owner) async {
+    final count = _attachments.where((photo) => photo.owner == owner).length;
+    if (count == 0) return true;
+    return await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Hapus extra beserta fotonya?'),
+            content:
+                Text('$count foto akan dilepas dari laporan saat disimpan.'),
+            actions: [
+              TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Batal')),
+              FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Hapus extra')),
+            ],
+          ),
+        ) ==
+        true;
   }
 
   List<Widget> _extraFields() => [
         const Align(
           alignment: Alignment.centerLeft,
           child: Text('Extra',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
         ),
-        const SizedBox(height: 4),
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Nama dan harga pengeluaran tambahan.',
-              style: TextStyle(color: AppColors.muted, fontSize: 12)),
-        ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 8),
         for (var i = 0; i < _extraNames.length; i++) ...[
           Container(
             key: ObjectKey(_extraNames[i]),
@@ -1148,7 +1128,11 @@ class _FormScreenState extends State<FormScreen> {
               _text(_extraNames[i], 'Nama extra ${i + 1}',
                   hint: 'Misalnya parkir, tol, atau cuci bus'),
               const SizedBox(height: 12),
-              _numberField(_extraAmounts[i], 'Harga extra ${i + 1}'),
+              _expenseField(_extraAmounts[i], 'Harga extra ${i + 1}',
+                  ExpenseOwner(ExpenseType.officeExtra, extraId: _extraIds[i]),
+                  photoLabel: _extraNames[i].text.trim().isEmpty
+                      ? 'Extra ${i + 1}'
+                      : _extraNames[i].text.trim()),
               Align(
                 alignment: Alignment.centerRight,
                 child: TextButton.icon(
@@ -1182,19 +1166,25 @@ class _FormScreenState extends State<FormScreen> {
     name.addListener(_changed);
     amount.addListener(_changed);
     setState(() {
+      _guestExtraIds.add(ExtraExpense.createId());
       _guestExtraNames.add(name);
       _guestExtraAmounts.add(amount);
       _guestExtraError = null;
     });
   }
 
-  void _removeGuestExtra(int index) {
+  Future<void> _removeGuestExtra(int index) async {
+    final owner =
+        ExpenseOwner(ExpenseType.discovaExtra, extraId: _guestExtraIds[index]);
+    if (!await _confirmExtraRemoval(owner) || !mounted) return;
     FocusScope.of(context).unfocus();
     final name = _guestExtraNames[index];
     final amount = _guestExtraAmounts[index];
     name.removeListener(_changed);
     amount.removeListener(_changed);
     setState(() {
+      _attachments.removeWhere((photo) => photo.owner == owner);
+      _guestExtraIds.removeAt(index);
       _guestExtraNames.removeAt(index);
       _guestExtraAmounts.removeAt(index);
       _guestExtraError = null;
@@ -1211,19 +1201,25 @@ class _FormScreenState extends State<FormScreen> {
     name.addListener(_changed);
     amount.addListener(_changed);
     setState(() {
+      _extraIds.add(ExtraExpense.createId());
       _extraNames.add(name);
       _extraAmounts.add(amount);
       _extraError = null;
     });
   }
 
-  void _removeExtra(int index) {
+  Future<void> _removeExtra(int index) async {
+    final owner =
+        ExpenseOwner(ExpenseType.officeExtra, extraId: _extraIds[index]);
+    if (!await _confirmExtraRemoval(owner) || !mounted) return;
     FocusScope.of(context).unfocus();
     final name = _extraNames[index];
     final amount = _extraAmounts[index];
     name.removeListener(_changed);
     amount.removeListener(_changed);
     setState(() {
+      _attachments.removeWhere((photo) => photo.owner == owner);
+      _extraIds.removeAt(index);
       _extraNames.removeAt(index);
       _extraAmounts.removeAt(index);
       _extraError = null;
@@ -1235,7 +1231,18 @@ class _FormScreenState extends State<FormScreen> {
     });
   }
 
+  bool _validateBus() {
+    if (busCatalog.any((bus) => bus.plate == _selectedPlate)) return true;
+    setState(() {
+      _busError = 'Pilih bus terlebih dahulu.';
+      _step = 0;
+    });
+    if (_scroll.hasClients) _scroll.jumpTo(0);
+    return false;
+  }
+
   void _nextStep() {
+    if (!_validateBus()) return;
     if (_step == 0 && !_validatePeriods()) {
       showAppMessage(context, _periodError!);
       return;
@@ -1285,12 +1292,12 @@ class _FormScreenState extends State<FormScreen> {
       final amount = parseRupiahInput(_guestExtraAmounts[i].text);
       final row = i + 1;
       if (name.isEmpty && _guestExtraAmounts[i].text.trim().isEmpty) {
-        setState(() =>
-            _guestExtraError = 'Extra tamu $row belum diisi. Isi atau hapus.');
+        setState(() => _guestExtraError =
+            'Extra Discova $row belum diisi. Isi atau hapus.');
         return false;
       }
       if (name.isEmpty) {
-        setState(() => _guestExtraError = 'Isi nama untuk extra tamu $row.');
+        setState(() => _guestExtraError = 'Isi nama untuk extra Discova $row.');
         return false;
       }
       if (amount <= 0) {
@@ -1303,8 +1310,8 @@ class _FormScreenState extends State<FormScreen> {
     return true;
   }
 
-  /// The span shown on the form is derived; stored dates only matter for
-  /// legacy reports, which keep their values until the crew adds periods.
+  /// Report dates are derived from periods; legacy reports keep their stored
+  /// dates until the crew adds periods.
   String _derivedSpanLabel(bool isStart, List<TripPeriod> periods) {
     final day =
         isStart ? TripPeriod.spanStart(periods) : TripPeriod.spanEnd(periods);
@@ -1320,26 +1327,28 @@ class _FormScreenState extends State<FormScreen> {
         id: existing.id,
         tanggalBuat: existing.tanggalBuat,
         hariTglBerangkat: existing.hariTglBerangkat,
-        jamBerangkat: _jam.text.trim(),
+        jamBerangkat: existing.jamBerangkat,
         hariTglKembali: existing.hariTglKembali,
-        noPolisi: _polisi.text.trim(),
+        noPolisi: _selectedPlate!,
         namaTamu: _namaTamu.text.trim(),
         pengemudi: _pengemudi.text.trim(),
         kernet: _kernet.text.trim(),
         tripType: existing.tripType,
         luarKotaCount: existing.luarKotaCount,
         dalamKotaCount: existing.dalamKotaCount,
-        kmAwal: parseRupiahInput(_kmAwal.text),
-        kmAkhir: parseRupiahInput(_kmAkhir.text),
+        kmAwal: existing.kmAwal,
+        kmAkhir: existing.kmAkhir,
         uangSaku: parseRupiahInput(_uangSaku.text),
         bbm: parseRupiahInput(_bbm.text),
         uangMakan: parseRupiahInput(_uangMakan.text),
+        uangMakanIsManual: _uangMakanIsManual,
         pembayaranTagihan: parseRupiahInput(_pembayaranTagihan.text),
         namaCrew: _namaCrew.text.trim(),
         catatan: _catatan.text.trim(),
         extras: [
           for (var i = 0; i < _extraNames.length; i++)
             ExtraExpense(
+                id: _extraIds[i],
                 name: _extraNames[i].text.trim(),
                 amount: parseRupiahInput(_extraAmounts[i].text)),
         ],
@@ -1351,6 +1360,7 @@ class _FormScreenState extends State<FormScreen> {
         guestExtras: [
           for (var i = 0; i < _guestExtraNames.length; i++)
             ExtraExpense(
+                id: _guestExtraIds[i],
                 name: _guestExtraNames[i].text.trim(),
                 amount: parseRupiahInput(_guestExtraAmounts[i].text)),
         ],
@@ -1366,9 +1376,9 @@ class _FormScreenState extends State<FormScreen> {
       id: saved?.id,
       tanggalBuat: saved?.tanggalBuat ?? DateTime.now(),
       hariTglBerangkat: _derivedSpanLabel(true, derived),
-      jamBerangkat: _jam.text.trim(),
+      jamBerangkat: saved?.jamBerangkat ?? '',
       hariTglKembali: _derivedSpanLabel(false, derived),
-      noPolisi: _polisi.text.trim(),
+      noPolisi: _selectedPlate!,
       namaTamu: _namaTamu.text.trim(),
       pengemudi: _pengemudi.text.trim(),
       kernet: _kernet.text.trim(),
@@ -1381,17 +1391,19 @@ class _FormScreenState extends State<FormScreen> {
           keepSavedEmptyTripData && saved != null ? saved.dalamKotaCount : null,
       resetTripData: _periods.isEmpty && !keepSavedEmptyTripData,
       tripPeriods: derived,
-      kmAwal: parseRupiahInput(_kmAwal.text),
-      kmAkhir: parseRupiahInput(_kmAkhir.text),
+      kmAwal: saved?.kmAwal ?? 0,
+      kmAkhir: saved?.kmAkhir ?? 0,
       uangSaku: parseRupiahInput(_uangSaku.text),
       bbm: parseRupiahInput(_bbm.text),
       uangMakan: parseRupiahInput(_uangMakan.text),
+      uangMakanIsManual: _uangMakanIsManual,
       pembayaranTagihan: parseRupiahInput(_pembayaranTagihan.text),
       namaCrew: _namaCrew.text.trim(),
       catatan: _catatan.text.trim(),
       extras: [
         for (var i = 0; i < _extraNames.length; i++)
           ExtraExpense(
+              id: _extraIds[i],
               name: _extraNames[i].text.trim(),
               amount: parseRupiahInput(_extraAmounts[i].text)),
       ],
@@ -1403,6 +1415,7 @@ class _FormScreenState extends State<FormScreen> {
       guestExtras: [
         for (var i = 0; i < _guestExtraNames.length; i++)
           ExtraExpense(
+              id: _guestExtraIds[i],
               name: _guestExtraNames[i].text.trim(),
               amount: parseRupiahInput(_guestExtraAmounts[i].text)),
       ],
@@ -1413,6 +1426,7 @@ class _FormScreenState extends State<FormScreen> {
   Future<void> _onSave() async {
     if (_busy || _loading) return;
     FocusScope.of(context).unfocus();
+    if (!_validateBus()) return;
     if (!_validatePeriods()) {
       _goToStep(0);
       showAppMessage(context, _periodError!);
@@ -1430,7 +1444,7 @@ class _FormScreenState extends State<FormScreen> {
     }
     setState(() => _saving = true);
     try {
-      await ReportStorage.save(_buildReport(), List<File>.of(_attachments));
+      await ReportStorage.save(_buildReport(), List.of(_attachments));
       if (!mounted) return;
       setState(() => _allowPop = true);
       await WidgetsBinding.instance.endOfFrame;
@@ -1447,6 +1461,7 @@ class _FormScreenState extends State<FormScreen> {
   Future<void> _onPreview() async {
     if (_busy || _loading) return;
     FocusScope.of(context).unfocus();
+    if (!_validateBus()) return;
     if (!_validatePeriods()) {
       _goToStep(0);
       showAppMessage(context, _periodError!);
@@ -1466,8 +1481,8 @@ class _FormScreenState extends State<FormScreen> {
     try {
       final report = _buildReport();
       final images = <Uint8List>[];
-      for (final file in _attachments) {
-        images.add(await file.readAsBytes());
+      for (final attachment in _attachments) {
+        images.add(await File(attachment.filePath).readAsBytes());
       }
       if (!mounted) return;
       await Navigator.push<void>(
@@ -1523,33 +1538,37 @@ class _GuestToggle extends StatelessWidget {
     final trackFill =
         Theme.of(context).inputDecorationTheme.fillColor ?? Colors.white;
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () => onChanged(!value),
-      child: Row(children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          curve: Curves.easeOut,
-          width: 46,
-          height: 26,
-          padding: const EdgeInsets.all(2),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(13),
-            color: trackFill,
-            border:
-                Border.all(color: value ? AppColors.brand : AppColors.border),
-          ),
-          alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-          child: Container(
-            width: 20,
-            height: 20,
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: 48),
+        child: Row(children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            curve: Curves.easeOut,
+            width: 46,
+            height: 26,
+            padding: const EdgeInsets.all(2),
             decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: value ? AppColors.brand : Colors.white,
+              borderRadius: BorderRadius.circular(13),
+              color: trackFill,
+              border:
+                  Border.all(color: value ? AppColors.brand : AppColors.border),
+            ),
+            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+            child: Container(
+              width: 20,
+              height: 20,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: value ? AppColors.brand : Colors.white,
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        const Expanded(child: Text('Ada uang saku tamu')),
-      ]),
+          const SizedBox(width: 12),
+          const Expanded(child: Text('Tamu Discova')),
+        ]),
+      ),
     );
   }
 }
@@ -1558,10 +1577,12 @@ class _TripPeriodDraft {
   DateTime? start;
   DateTime? end;
   TripType? type;
+  final TextEditingController destination;
 
-  _TripPeriodDraft({this.start, this.end, this.type});
+  _TripPeriodDraft({this.start, this.end, this.type, String destination = ''})
+      : destination = TextEditingController(text: destination);
 
-  void dispose() {}
+  void dispose() => destination.dispose();
 }
 
 /// Keeps the caret beside the edited digits, including edits in the middle.

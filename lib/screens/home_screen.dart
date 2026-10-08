@@ -9,7 +9,6 @@ import '../models/report.dart';
 import '../ui/app_theme.dart';
 import '../ui/components.dart';
 import '../utils/format.dart';
-import 'bus_list_screen.dart';
 import 'form_screen.dart';
 import 'preview_screen.dart';
 
@@ -23,10 +22,8 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   final _search = TextEditingController();
   List<Report> _reports = [];
-  List<Bus> _buses = [];
-  String _busName = '';
-  String _plate = '';
-  int _filter = 0;
+  String? _filterPlate;
+  bool _deficitOnly = false;
   bool _loading = true;
   bool _opening = false;
   String? _error;
@@ -48,39 +45,14 @@ class _HomeScreenState extends State<HomeScreen> {
       _loading = true;
       _error = null;
     });
-    try {
-      final selected = await DatabaseHelper.instance.getSelectedBus();
-      if (!mounted) return;
-      if (selected == null) {
-        await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(
-                builder: (_) => const BusListScreen(requireBus: true)));
-        if (!mounted) return;
-      }
-      await _refresh();
-    } catch (_) {
-      if (mounted) {
-        setState(() {
-          _loading = false;
-          _error = 'Data di perangkat belum dapat dibuka. Coba muat ulang.';
-        });
-      }
-    }
+    await _refresh();
   }
 
   Future<void> _refresh() async {
     try {
-      final db = DatabaseHelper.instance;
-      final bus = await db.getSelectedBus();
-      if (bus == null) throw StateError('Tambahkan bus terlebih dahulu.');
-      final buses = await db.getBuses();
-      final reports = await db.getAllReports();
+      final reports = await DatabaseHelper.instance.getAllReports();
       if (!mounted) return;
       setState(() {
-        _busName = bus.name;
-        _plate = bus.plate;
-        _buses = buses;
         _reports = reports;
         _loading = false;
         _error = null;
@@ -95,12 +67,6 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  Future<void> _chooseBus() async {
-    await Navigator.push<bool>(
-        context, MaterialPageRoute(builder: (_) => const BusListScreen()));
-    if (mounted) await _initialize();
-  }
-
   Future<void> _edit([Report? report]) async {
     final saved = await Navigator.push<bool>(
         context, MaterialPageRoute(builder: (_) => FormScreen(report: report)));
@@ -110,17 +76,12 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  String _busNameForPlate(String plate) => busNameForPlate(_buses, plate);
-
   List<Report> get _filteredReports {
     final query = _search.text.trim().toLowerCase();
     return _reports.where((r) {
-      if (_filter == 1 &&
-          r.noPolisi.trim().toUpperCase() != _plate.trim().toUpperCase()) {
-        return false;
-      }
-      if (_filter == 2 && r.sisa >= 0) return false;
-      final busName = _busNameForPlate(r.noPolisi);
+      if (_filterPlate != null && r.noPolisi != _filterPlate) return false;
+      if (_deficitOnly && r.sisa >= 0) return false;
+      final busName = busNameForPlate(r.noPolisi);
       return '${r.noPolisi} $busName ${r.pengemudi} ${r.kernet} ${r.namaCrew} ${r.hariTglBerangkat} ${formatTanggalPendek(r.tanggalBuat)}'
           .toLowerCase()
           .contains(query);
@@ -141,10 +102,6 @@ class _HomeScreenState extends State<HomeScreen> {
                 'Happy Group',
                 style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700))),
         actions: [
-          IconButton(
-              onPressed: _loading ? null : _chooseBus,
-              tooltip: 'Daftar bus',
-              icon: const Icon(Icons.directions_bus_outlined)),
           IconButton(
               onPressed: _loading ? null : _initialize,
               tooltip: 'Muat ulang',
@@ -185,8 +142,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                     'Catat perjalanan dan kelola pengeluaran bus.',
                                     style: TextStyle(color: AppColors.muted)),
                                 const SizedBox(height: 24),
-                                _busCard(),
-                                const SizedBox(height: 28),
                                 Row(children: [
                                   Expanded(
                                       child: Text('Riwayat laporan',
@@ -218,16 +173,22 @@ class _HomeScreenState extends State<HomeScreen> {
                                 ),
                                 const SizedBox(height: 12),
                                 Wrap(spacing: 8, runSpacing: 4, children: [
-                                  for (final entry in [
-                                    'Semua bus',
-                                    'Bus aktif',
-                                    'Defisit'
-                                  ].asMap().entries)
+                                  ChoiceChip(
+                                      label: const Text('Semua bus'),
+                                      selected: _filterPlate == null,
+                                      onSelected: (_) =>
+                                          setState(() => _filterPlate = null)),
+                                  for (final bus in busCatalog)
                                     ChoiceChip(
-                                        label: Text(entry.value),
-                                        selected: _filter == entry.key,
+                                        label: Text(bus.name),
+                                        selected: _filterPlate == bus.plate,
                                         onSelected: (_) => setState(
-                                            () => _filter = entry.key)),
+                                            () => _filterPlate = bus.plate)),
+                                  FilterChip(
+                                      label: const Text('Defisit'),
+                                      selected: _deficitOnly,
+                                      onSelected: (selected) => setState(
+                                          () => _deficitOnly = selected)),
                                 ]),
                                 const SizedBox(height: 16),
                                 if (_opening)
@@ -257,7 +218,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                     : TextButton(
                                         onPressed: () {
                                           _search.clear();
-                                          setState(() => _filter = 0);
+                                          setState(() {
+                                            _filterPlate = null;
+                                            _deficitOnly = false;
+                                          });
                                         },
                                         child: const Text('Reset pencarian')),
                               ),
@@ -287,60 +251,9 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _busCard() => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(22),
-        decoration: BoxDecoration(
-            color: AppColors.ink, borderRadius: BorderRadius.circular(22)),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: .1),
-                    borderRadius: BorderRadius.circular(12)),
-                child: const Icon(Icons.directions_bus_rounded,
-                    color: Colors.white, size: 24)),
-            const SizedBox(width: 12),
-            Expanded(
-                child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                  const Text('BUS AKTIF',
-                      style: TextStyle(
-                          color: Color(0xFFBFC5CB),
-                          fontSize: 11,
-                          letterSpacing: 1.4,
-                          fontWeight: FontWeight.w700)),
-                  const SizedBox(height: 3),
-                  Text(_busName,
-                      style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700)),
-                ])),
-            IconButton(
-                onPressed: _chooseBus,
-                tooltip: 'Pilih bus',
-                icon:
-                    const Icon(Icons.swap_horiz_rounded, color: Colors.white)),
-          ]),
-          const SizedBox(height: 22),
-          const Text('Nomor polisi',
-              style: TextStyle(color: Color(0xFFBFC5CB), fontSize: 12)),
-          const SizedBox(height: 6),
-          Text(_plate,
-              style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 1,
-                  color: Colors.white)),
-        ]),
-      );
-
   Widget _reportCard(Report report) {
     final deficit = report.sisa < 0;
-    final busName = _busNameForPlate(report.noPolisi);
+    final busName = busNameForPlate(report.noPolisi);
     final driver =
         report.pengemudi.isEmpty ? 'Pengemudi belum diisi' : report.pengemudi;
     return Material(
@@ -385,7 +298,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       : report.noPolisi,
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),
-              Text(busName.isEmpty ? driver : '$busName • $driver',
+              Text('$busName • $driver',
                   style: const TextStyle(color: AppColors.muted)),
               const Divider(height: 24),
               Padding(
@@ -415,9 +328,9 @@ class _HomeScreenState extends State<HomeScreen> {
     try {
       final images = <Uint8List>[];
       if (report.id != null) {
-        for (final path
+        for (final attachment
             in await DatabaseHelper.instance.getAttachments(report.id!)) {
-          final file = File(path);
+          final file = File(attachment.filePath);
           if (await file.exists()) images.add(await file.readAsBytes());
         }
       }

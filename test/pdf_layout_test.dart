@@ -1,5 +1,6 @@
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:happy_bus_crew/models/bus.dart';
 import 'package:happy_bus_crew/models/report.dart';
 import 'package:happy_bus_crew/pdf/report_pdf.dart';
 import 'package:happy_bus_crew/utils/format.dart';
@@ -18,7 +19,7 @@ void main() {
         hariTglBerangkat: 'Jumat, 12/06/2026',
         jamBerangkat: '08:00',
         hariTglKembali: 'Selasa, 16/06/2026',
-        noPolisi: 'B 1001 XX',
+        noPolisi: 'AB 7317 BK',
         namaTamu: 'Bpk. Hartono',
         pengemudi: 'Budi',
         kernet: 'Agus',
@@ -26,8 +27,7 @@ void main() {
         kmAkhir: 1250,
         uangSaku: 1000000,
         bbm: 600000,
-        uangMakan: 100000,
-        extras: const [
+        extras: [
           ExtraExpense(name: 'Parkir', amount: 20000),
           ExtraExpense(name: 'Tol', amount: 30000),
         ],
@@ -61,10 +61,8 @@ void main() {
     expect(
         text,
         contains(
-            'JADWAL Berangkat Jumat, 12/06/2026 Kembali Selasa, 16/06/2026 '
-            'Jam 08:00'));
-    expect(text,
-        contains('BUS No. Polisi B 1001 XX KM Awal 1.000 KM Akhir 1.250'));
+            'JADWAL Berangkat Jumat, 12/06/2026 Kembali Selasa, 16/06/2026'));
+    expect(text, contains('BUS Nama Bus HG 2 No. Polisi AB 7317 BK'));
     expect(text, contains('CREW Pengemudi Budi Kernet Agus'));
     expect(text, contains('TAMU Nama Bpk. Hartono'));
     expect(text, contains('No Periode Kategori Hari'));
@@ -75,49 +73,132 @@ void main() {
     expect(text.indexOf('Pengeluaran'), lessThan(text.indexOf('Ringkasan')));
     expect(text, contains('Parkir 20.000'));
     expect(text, contains('Tol 30.000'));
-    expect(text, contains('Total Pengeluaran 750.000'));
+    expect(text, contains('Uang Makan 250.000'));
+    expect(text, contains('Total Pengeluaran 900.000'));
     expect(
         text,
-        contains('Uang Saku Rp 1.000.000 Total Pengeluaran Rp 750.000 '
-            'SISA Rp 250.000 Pembayaran tagihan Rp 50.000'));
+        contains('Uang Saku Rp 1.000.000 Total Pengeluaran Rp 900.000 '
+            'SISA Rp 100.000 Pembayaran tagihan Rp 50.000'));
     expect(RegExp(r'\b50\.000\b').allMatches(text), hasLength(1));
     expect(text, contains('Catatan perjalanan'));
     expect(text, contains('Dibuat oleh, Budi'));
     expect(text, contains('Hal. 1 / 1'));
-    expect(text, contains('KM Awal 1.000'));
-    expect(text, contains('KM Akhir 1.250'));
-    expect(text, contains('Jam 08:00'));
-    expect(text, contains('No. Polisi B 1001 XX'));
+    expect(text, isNot(contains('KM')));
+    expect(text, isNot(contains('Jam')));
+    expect(text, isNot(contains('08:00')));
+    expect(text, contains('No. Polisi AB 7317 BK'));
     expect(text, contains('Pengemudi Budi'));
     expect(text, contains('Kernet Agus'));
   });
 
-  test('guest allowance prints after the summary and before trip notes',
+  test('PDF meals and office balance count entered days and exclude gaps',
       () async {
-    final doc = await ReportPdfBuilder.build(baseReport().copyWith(
-      hasGuestAllowance: true,
-      guestUangSaku: 100000,
-      guestTol: 10000,
-      guestPenyeberangan: 20000,
-      guestParkir: 5000,
-      guestExtras: const [ExtraExpense(name: 'Bagasi', amount: 3000)],
-      guestCatatan: 'Catatan khusus tamu',
-    ));
+    final report = baseReport().copyWith(tripPeriods: [
+      TripPeriod(
+          start: DateTime(2026, 6, 12),
+          end: DateTime(2026, 6, 13),
+          type: TripType.luarKota),
+      TripPeriod(
+          start: DateTime(2026, 6, 20),
+          end: DateTime(2026, 6, 20),
+          type: TripType.dalamKota),
+    ]);
+    final doc = await ReportPdfBuilder.build(report);
     final text = normalizePdfText((await pdfPageText(doc)).join(' '));
-    final summary = text.indexOf('Ringkasan');
-    final guest = text.indexOf('Uang Saku Tamu Bpk. Hartono');
-    final note = text.indexOf('Catatan perjalanan');
+    expect(text, contains('Uang Makan 150.000'));
+    expect(text, contains('Total Pengeluaran Rp 800.000'));
+    expect(text, contains('SISA Rp 200.000'));
+    final empty =
+        await ReportPdfBuilder.build(report.copyWith(tripPeriods: []));
+    expect(normalizePdfText((await pdfPageText(empty)).join(' ')),
+        contains('Uang Makan 0'));
+  });
 
-    expect(summary, greaterThanOrEqualTo(0));
-    expect(guest, greaterThan(summary));
-    expect(note, greaterThan(guest));
-    expect(text, contains('Tol 10.000'));
-    expect(text, contains('Penyeberangan 20.000'));
-    expect(text, contains('Parkir 5.000'));
-    expect(text, contains('Bagasi 3.000'));
-    expect(text, contains('Total Pengeluaran Tamu 38.000'));
-    expect(text, contains('SISA TAMU Rp 62.000'));
-    expect(text, contains('Catatan khusus tamu'));
+  test('PDF omits time and kilometer rows for filled and empty stored values',
+      () async {
+    for (final report in [
+      baseReport(),
+      baseReport().copyWith(jamBerangkat: '', kmAwal: 0, kmAkhir: 0)
+    ]) {
+      final doc = await ReportPdfBuilder.build(report);
+      final text = normalizePdfText((await pdfPageText(doc)).single);
+      expect(text, isNot(contains('Jam')));
+      expect(text, isNot(contains('KM')));
+      expect(text, isNot(contains('08:00')));
+      expect(text, contains('Kembali Selasa, 16/06/2026 BUS Nama Bus HG 2'));
+      expect(text, contains('No. Polisi AB 7317 BK CREW Pengemudi Budi'));
+    }
+  });
+
+  test('Discova finance stays fixed when the trip guest name changes',
+      () async {
+    String? firstFinance;
+    for (final name in ['Bpk. Hartono', 'Ibu Ratna', '']) {
+      final doc = await ReportPdfBuilder.build(baseReport().copyWith(
+        namaTamu: name,
+        hasGuestAllowance: true,
+        guestUangSaku: 100000,
+        guestTol: 10000,
+        guestPenyeberangan: 20000,
+        guestParkir: 5000,
+        guestExtras: [ExtraExpense(name: 'Bagasi', amount: 3000)],
+        guestCatatan: 'Catatan khusus tamu',
+      ));
+      final text = normalizePdfText((await pdfPageText(doc)).join(' '));
+      final summary = text.indexOf('Ringkasan');
+      final discova = text.indexOf('Uang Saku Discova');
+      final note = text.indexOf('Catatan perjalanan');
+
+      expect(summary, greaterThanOrEqualTo(0));
+      expect(discova, greaterThan(summary));
+      expect(note, greaterThan(discova));
+      if (name.isEmpty) {
+        expect(text, isNot(contains('TAMU')));
+      } else {
+        expect(text, contains('TAMU Nama $name'));
+      }
+      final finance = text.substring(discova, note);
+      firstFinance ??= finance;
+      expect(finance, firstFinance);
+      expect(finance, contains('Uang Saku Discova No Keterangan Jumlah'));
+      expect(finance, contains('Tol 10.000'));
+      expect(finance, contains('Penyeberangan 20.000'));
+      expect(finance, contains('Parkir 5.000'));
+      expect(finance, contains('Bagasi 3.000'));
+      expect(finance, contains('Total Pengeluaran Discova 38.000'));
+      expect(finance, contains('Uang Saku Discova Rp 100.000'));
+      expect(finance, contains('SISA DISCOVA Rp 62.000'));
+      expect(finance, contains('Catatan khusus tamu'));
+      expect(finance, isNot(contains('Uang Saku Tamu')));
+      expect(finance, isNot(contains('Total Pengeluaran Tamu')));
+      expect(finance, isNot(contains('SISA TAMU')));
+      if (name.isNotEmpty) {
+        expect(finance, isNot(contains(name)));
+      }
+    }
+  });
+
+  test('Discova deficit and zero balance use fixed labels', () async {
+    for (final allowance in [1000, 10000]) {
+      final doc = await ReportPdfBuilder.build(baseReport().copyWith(
+        namaTamu: 'Ibu Ratna',
+        hasGuestAllowance: true,
+        guestUangSaku: allowance,
+        guestTol: 10000,
+      ));
+      final text = normalizePdfText((await pdfPageText(doc)).join(' '));
+      expect(text, contains('TAMU Nama Ibu Ratna'));
+      expect(text, contains('Uang Saku Discova No Keterangan Jumlah'));
+      expect(text, contains('Total Pengeluaran Discova 10.000'));
+      expect(text, contains('Uang Saku Discova ${formatRupiah(allowance)}'));
+      expect(
+          text,
+          contains(allowance == 1000
+              ? 'DEFISIT DISCOVA -Rp 9.000'
+              : 'SISA DISCOVA Rp 0'));
+      expect(text, isNot(contains('DEFISIT TAMU')));
+      expect(text, contains('SISA Rp 350.000'));
+    }
   });
 
   test('guest allowance block is hidden unless enabled', () async {
@@ -129,30 +210,33 @@ void main() {
     ));
     final text = normalizePdfText((await pdfPageText(doc)).join(' '));
 
-    expect(text, isNot(contains('Uang Saku Tamu')));
-    expect(text, isNot(contains('Total Pengeluaran Tamu')));
-    expect(text, isNot(contains('SISA TAMU')));
+    expect(text, isNot(contains('Uang Saku Discova')));
+    expect(text, isNot(contains('Total Pengeluaran Discova')));
+    expect(text, isNot(contains('SISA DISCOVA')));
+    expect(text, isNot(contains('DEFISIT DISCOVA')));
     expect(text, isNot(contains('Catatan khusus tamu')));
+    expect(text, contains('TAMU Nama Bpk. Hartono'));
   });
 
-  test('bus name and guest name join the band only when recorded', () async {
-    final named = await ReportPdfBuilder.build(
-      baseReport().copyWith(namaTamu: 'Bpk. Hartono'),
-      busName: 'Happy Bus 01',
-    );
-    final text = normalizePdfText((await pdfPageText(named)).single);
-    expect(
-        text,
-        contains(
-            'BUS Nama Bus Happy Bus 01 No. Polisi B 1001 XX KM Awal 1.000'));
-    expect(text, contains('TAMU Nama Bpk. Hartono'));
+  test('PDF derives each bus name from the stored plate in the fixed catalog',
+      () async {
+    for (final bus in busCatalog) {
+      final doc = await ReportPdfBuilder.build(
+        baseReport().copyWith(noPolisi: bus.plate),
+      );
+      final pages = await pdfPageText(doc);
+      expect(pages, hasLength(1));
+      final text = normalizePdfText(pages.single);
+      expect(
+          text, contains('BUS Nama Bus ${bus.name} No. Polisi ${bus.plate}'));
+      expect(text, contains('TAMU Nama Bpk. Hartono'));
+    }
 
     final plain =
         await ReportPdfBuilder.build(baseReport().copyWith(namaTamu: ''));
     final plainText = normalizePdfText((await pdfPageText(plain)).single);
     expect(plainText, isNot(contains('TAMU')));
-    expect(plainText, isNot(contains('Nama Bus')));
-    expect(plainText, contains('BUS No. Polisi B 1001 XX'));
+    expect(plainText, contains('BUS Nama Bus HG 2 No. Polisi AB 7317 BK'));
   });
 
   test('a long guest name wraps inside its column instead of clipping',
@@ -239,7 +323,7 @@ void main() {
     expect(text, isNot(contains('Tidak ada periode')));
     expect(text,
         contains('Total Pengeluaran ${formatNumberId(r.totalPengeluaran)}'));
-    expect(text, contains('SISA ${formatRupiah(r.sisa)}'));
+    expect(text, contains('DEFISIT ${formatRupiah(r.sisa)}'));
     expect(text,
         contains('Pembayaran tagihan ${formatRupiah(r.pembayaranTagihan)}'));
     expect(normalizePdfText(reportPages.last), contains('Dibuat oleh, Budi'));
@@ -274,15 +358,15 @@ void main() {
   });
 
   test('deficit and zero balance exclude payments from expenses', () async {
-    for (final allowance in [500000, 750000]) {
+    for (final allowance in [500000, 650000]) {
       final r =
           baseReport().copyWith(uangSaku: allowance, pembayaranTagihan: 900000);
       final doc = await ReportPdfBuilder.build(r);
       final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
-      expect(text, contains('Total Pengeluaran Rp 750.000'));
+      expect(text, contains('Total Pengeluaran Rp 650.000'));
       expect(text, contains('Pembayaran tagihan Rp 900.000'));
       expect(text,
-          contains(allowance == 500000 ? 'DEFISIT -Rp 250.000' : 'SISA Rp 0'));
+          contains(allowance == 500000 ? 'DEFISIT -Rp 150.000' : 'SISA Rp 0'));
     }
   });
 

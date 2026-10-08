@@ -25,11 +25,13 @@ class TripPeriod {
   final DateTime start;
   final DateTime end;
   final TripType type;
+  final String destination;
 
   TripPeriod({
     required DateTime start,
     required DateTime end,
     required this.type,
+    this.destination = '',
   })  : start = DateTime(start.year, start.month, start.day),
         end = DateTime(end.year, end.month, end.day) {
     if (_day(this.end).isBefore(_day(this.start))) {
@@ -46,17 +48,28 @@ class TripPeriod {
         'start': _dateString(start),
         'end': _dateString(end),
         'type': type.value,
+        if (destination.isNotEmpty) 'destination': destination,
       };
 
   factory TripPeriod.fromMap(Map<String, dynamic> map) {
     final type = TripType.fromValue(map['type']);
     final start = _parseDate(map['start']);
     final end = _parseDate(map['end']);
-    if (type == TripType.unspecified || end.isBefore(start)) {
+    final destination = map['destination'] ?? '';
+    if (type == TripType.unspecified ||
+        end.isBefore(start) ||
+        destination is! String) {
       throw const FormatException('Invalid trip period');
     }
-    return TripPeriod(start: start, end: end, type: type);
+    return TripPeriod(
+        start: start, end: end, type: type, destination: destination);
   }
+
+  /// Shared boundary dates count as overlap. Time of day is ignored.
+  static bool datesOverlap(DateTime start, DateTime end, DateTime otherStart,
+          DateTime otherEnd) =>
+      !_day(end).isBefore(_day(otherStart)) &&
+      !_day(start).isAfter(_day(otherEnd));
 
   /// Empty periods are optional. Otherwise every trip day must occur once.
   /// The trip span comes from the rows themselves, so rows may sit apart

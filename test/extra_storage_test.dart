@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:happy_bus_crew/db/database.dart';
 import 'package:happy_bus_crew/models/report.dart';
+import 'package:happy_bus_crew/models/report_attachment.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -38,11 +39,11 @@ void main() {
       'pembayaran_tagihan': 50000,
       'luar_kota_count': 3,
       'dalam_kota_count': 5,
-    }).copyWith(extras: const [
+    }).copyWith(extras: [
       ExtraExpense(name: 'Parkir', amount: 20000),
       ExtraExpense(name: 'Tol', amount: 30000),
     ]);
-    const receipts = ['/saved/receipt.jpg'];
+    const receipts = [ReportAttachment(filePath: '/saved/receipt.jpg')];
     final id = await store.saveReportWithAttachments(report, receipts);
     await store.close();
     final restored = (await store.getReport(id))!;
@@ -52,7 +53,7 @@ void main() {
     expect(restored.dalamKotaCount, 5);
     expect(restored.extra, 50000);
     expect(restored.pembayaranTagihan, 50000);
-    expect(restored.totalPengeluaran, 750000);
+    expect(restored.totalPengeluaran, 650000);
     expect(restored.kmAwal, 123);
     expect(restored.kmAkhir, 456);
     expect(await store.getAttachments(id), receipts);
@@ -60,7 +61,7 @@ void main() {
     final edited = restored.copyWith(
         luarKotaCount: 0,
         dalamKotaCount: 8,
-        extras: const [ExtraExpense(name: 'Tol kota', amount: 150000)]);
+        extras: [ExtraExpense(name: 'Tol kota', amount: 150000)]);
     await store.saveReportWithAttachments(edited, receipts);
     await store.close();
     expect((await store.getReport(id))!.extras.single.name, 'Tol kota');
@@ -72,7 +73,7 @@ void main() {
     await store.close();
     expect((await store.getReport(id))!.extras, isEmpty);
     expect((await store.getReport(id))!.extra, 0);
-    expect((await store.getReport(id))!.totalPengeluaran, 700000);
+    expect((await store.getReport(id))!.totalPengeluaran, 600000);
     expect(await store.getAttachments(id), receipts);
   });
 
@@ -171,7 +172,7 @@ void main() {
       await legacy.close();
 
       final upgraded = await store.db;
-      expect(await upgraded.getVersion(), 13);
+      expect(await upgraded.getVersion(), 15);
       final rows = await upgraded.query('reports', orderBy: 'id');
       for (var i = 0; i < rows.length; i++) {
         expect(rows[i], {
@@ -191,9 +192,13 @@ void main() {
           'guest_parkir': 0,
           'guest_extra_details': '[]',
           'guest_catatan': '',
+          'uang_makan_manual': 0,
         });
       }
-      expect(await upgraded.query('report_attachments'), originalReceipts);
+      expect(await upgraded.query('report_attachments'), [
+        for (final row in originalReceipts)
+          {...row, 'expense_type': null, 'extra_id': null},
+      ]);
       expect(await upgraded.query('buses'), originalBuses);
       expect(await upgraded.query('settings'), originalSettings);
       for (final row in originalRows) {
@@ -217,13 +222,15 @@ void main() {
       expect(report.extras.single.amount, 75000);
       expect(report.totalPengeluaran, 175000);
       expect((await store.getReport(2))!.extras, isEmpty);
-      await store.saveReportWithAttachments(report, ['/saved/receipt.jpg']);
+      await store.saveReportWithAttachments(
+          report, [const ReportAttachment(filePath: '/saved/receipt.jpg')]);
       await store.close();
       expect((await store.getReport(1))!.tripType, TripType.unspecified);
       expect((await store.getReport(1))!.extras.single.name,
           version == 6 ? 'Extra lama' : 'Parkir');
       expect((await store.getReport(1))!.extra, 75000);
-      expect(await store.getAttachments(1), ['/saved/receipt.jpg']);
+      expect(await store.getAttachments(1),
+          [const ReportAttachment(filePath: '/saved/receipt.jpg')]);
     });
   }
 }

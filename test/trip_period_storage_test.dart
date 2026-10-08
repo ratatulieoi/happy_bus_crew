@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:happy_bus_crew/db/database.dart';
 import 'package:happy_bus_crew/models/report.dart';
+import 'package:happy_bus_crew/models/report_attachment.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
@@ -55,7 +56,7 @@ void main() {
 
   test('periods survive reopening, replacement and clearing with attachments',
       () async {
-    const paths = ['/saved/attachment.jpg'];
+    const paths = [ReportAttachment(filePath: '/saved/attachment.jpg')];
     final original = report().copyWith(tripPeriods: periods());
     final id = await store.saveReportWithAttachments(original, paths);
     await store.close();
@@ -93,9 +94,103 @@ void main() {
     expect(restored.tripPeriods, isEmpty);
     expect(restored.luarKotaCount, isNull);
     expect(restored.dalamKotaCount, isNull);
-    expect(restored.totalPengeluaran, original.totalPengeluaran);
+    expect(restored.uangMakan, 0);
+    expect(restored.totalPengeluaran, 350000);
     expect(restored.pembayaranTagihan, original.pembayaranTagihan);
     expect(await store.getAttachments(id), paths);
+  });
+
+  test('automatic meals persist and recalculate after range edits and clearing',
+      () async {
+    final original = report().copyWith(tripPeriods: [
+      TripPeriod(
+          start: DateTime(2026, 9, 1),
+          end: DateTime(2026, 9, 2),
+          type: TripType.luarKota),
+      TripPeriod(
+          start: DateTime(2026, 9, 8),
+          end: DateTime(2026, 9, 8),
+          type: TripType.dalamKota),
+    ]);
+    final id = await store.saveReportWithAttachments(original, []);
+    await store.close();
+    var reopened = (await store.getReport(id))!;
+    expect(reopened.uangMakan, 150000);
+    expect(reopened.totalPengeluaran, 500000);
+    expect(
+        (await (await store.db).query('reports')).single['uang_makan'], 150000);
+    await store.saveReportWithAttachments(
+        reopened.copyWith(tripPeriods: [
+          TripPeriod(
+              start: DateTime(2026, 9, 8),
+              end: DateTime(2026, 9, 11),
+              type: TripType.dalamKota),
+        ]),
+        []);
+    await store.close();
+    reopened = (await store.getReport(id))!;
+    expect(reopened.uangMakan, 200000);
+    expect(reopened.sisa, 450000);
+    await store
+        .saveReportWithAttachments(reopened.copyWith(tripPeriods: []), []);
+    await store.close();
+    expect((await store.getReport(id))!.uangMakan, 0);
+    expect((await (await store.db).query('reports')).single['uang_makan'], 0);
+  });
+
+  test(
+      'manual meals including zero and auto-equal amounts survive SQLite reopening',
+      () async {
+    for (final amount in [0, 250000, 123456]) {
+      final original = report().copyWith(
+          tripPeriods: periods(), uangMakan: amount, uangMakanIsManual: true);
+      final id = await store.saveReportWithAttachments(
+          original, [const ReportAttachment(filePath: '/saved/receipt.jpg')]);
+      await store.close();
+      var reopened = (await store.getReport(id))!;
+      expect(reopened.uangMakanIsManual, isTrue);
+      expect(reopened.uangMakan, amount);
+      expect(reopened.toMap(), {...original.toMap(), 'id': id});
+      await store.saveReportWithAttachments(reopened.copyWith(tripPeriods: []),
+          [const ReportAttachment(filePath: '/saved/receipt.jpg')]);
+      await store.close();
+      reopened = (await store.getReport(id))!;
+      expect(reopened.mealDays, 0);
+      expect(reopened.uangMakan, amount);
+      expect(reopened.totalPengeluaran, 350000 + amount);
+      expect(reopened.sisa, 650000 - amount);
+      expect(reopened.pembayaranTagihan, 500000);
+      expect(await store.getAttachments(id),
+          [const ReportAttachment(filePath: '/saved/receipt.jpg')]);
+    }
+  });
+
+  test(
+      'v13 upgrade only adds the meal mode and preserves report and attachments',
+      () async {
+    final original = report().copyWith(tripPeriods: periods());
+    final id = await store.saveReportWithAttachments(
+        original, [const ReportAttachment(filePath: '/saved/receipt.jpg')]);
+    final database = await store.db;
+    await database.execute('ALTER TABLE reports DROP COLUMN uang_makan_manual');
+    await database
+        .execute('ALTER TABLE report_attachments DROP COLUMN expense_type');
+    await database
+        .execute('ALTER TABLE report_attachments DROP COLUMN extra_id');
+    await database.setVersion(13);
+    final before = (await database.query('reports')).single;
+    final attachments = await database.query('report_attachments');
+    await store.close();
+    final upgraded = await store.db;
+    expect(await upgraded.getVersion(), 15);
+    expect((await upgraded.query('reports')).single,
+        {...before, 'uang_makan_manual': 0});
+    expect(await upgraded.query('report_attachments'), [
+      for (final row in attachments)
+        {...row, 'expense_type': null, 'extra_id': null},
+    ]);
+    expect((await store.getReport(id))!.uangMakan, 250000);
+    expect((await store.getReport(id))!.uangMakanIsManual, isFalse);
   });
 
   test('v10 migration leaves historical counts intact until replaced',
@@ -150,7 +245,8 @@ void main() {
       ..remove('guest_penyeberangan')
       ..remove('guest_parkir')
       ..remove('guest_extra_details')
-      ..remove('guest_catatan');
+      ..remove('guest_catatan')
+      ..remove('uang_makan_manual');
     final id = await legacy.insert('reports', oldData);
     await legacy.insert('report_attachments', {
       'report_id': id,
@@ -160,7 +256,7 @@ void main() {
     await legacy.close();
 
     final upgraded = await store.db;
-    expect(await upgraded.getVersion(), 13);
+    expect(await upgraded.getVersion(), 15);
     expect((await upgraded.query('reports')).single, {
       ...oldRow,
       'trip_periods': null,
@@ -172,6 +268,7 @@ void main() {
       'guest_parkir': 0,
       'guest_extra_details': '[]',
       'guest_catatan': '',
+      'uang_makan_manual': 0,
     });
     final restored = (await store.getReport(id))!;
     expect(restored.namaTamu, isEmpty);
@@ -195,7 +292,8 @@ void main() {
     expect(replaced.tripPeriods, hasLength(2));
     expect(replaced.luarKotaCount, 2);
     expect(replaced.dalamKotaCount, 3);
-    expect(replaced.totalPengeluaran, restored.totalPengeluaran);
+    expect(replaced.uangMakan, 250000);
+    expect(replaced.totalPengeluaran, 600000);
     expect(replaced.pembayaranTagihan, restored.pembayaranTagihan);
     expect(await store.getAttachments(id), paths);
   });

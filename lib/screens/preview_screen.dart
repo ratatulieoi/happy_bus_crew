@@ -8,8 +8,6 @@ import 'package:pdf/pdf.dart';
 import 'package:printing/printing.dart';
 import 'package:share_plus/share_plus.dart';
 
-import '../db/database.dart';
-import '../models/bus.dart';
 import '../models/report.dart';
 import '../pdf/report_pdf.dart';
 import '../ui/app_theme.dart';
@@ -52,7 +50,6 @@ class _PreviewScreenState extends State<PreviewScreen> {
     try {
       final document = await ReportPdfBuilder.build(
         widget.report,
-        busName: await _busName(),
         attachmentImages: widget.attachmentImages,
       );
       final bytes = await document.save();
@@ -88,17 +85,6 @@ class _PreviewScreenState extends State<PreviewScreen> {
 
   bool get _isDesktop =>
       !kIsWeb && (Platform.isLinux || Platform.isWindows || Platform.isMacOS);
-
-  /// The report stores only a plate, so the saved bus name is read on demand.
-  /// An unreadable bus list still leaves the plate to identify the trip.
-  Future<String> _busName() async {
-    try {
-      final buses = await DatabaseHelper.instance.getBuses();
-      return busNameForPlate(buses, widget.report.noPolisi);
-    } catch (_) {
-      return '';
-    }
-  }
 
   Future<void> _export(String action) async {
     if (!_canExport) return;

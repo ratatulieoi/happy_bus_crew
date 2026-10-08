@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../models/bus.dart';
 import '../models/report.dart';
 import '../utils/format.dart';
 
@@ -67,7 +68,6 @@ class ReportPdfBuilder {
   /// one generic Lampiran page per image after the report.
   static Future<pw.Document> build(
     Report r, {
-    String? busName,
     Uint8List? logoBytes,
     List<Uint8List> attachmentImages = const [],
   }) async {
@@ -83,7 +83,7 @@ class ReportPdfBuilder {
         header: (ctx) => _buildHeader(logo, ctx),
         footer: (ctx) => _buildFooter(r, ctx),
         build: (ctx) => [
-          _buildIdentity(r, busName ?? ''),
+          _buildIdentity(r, busNameForPlate(r.noPolisi)),
           pw.SizedBox(height: 12),
           _buildSection('Perjalanan'),
           _buildTripTable(r),
@@ -231,17 +231,14 @@ class ReportPdfBuilder {
         [
           ('Berangkat', spanStartLabel(r, r.tripPeriods ?? const [])),
           ('Kembali', spanEndLabel(r, r.tripPeriods ?? const [])),
-          ('Jam', r.jamBerangkat),
         ]
       ),
       (
         'Bus',
         3,
         [
-          if (busName.trim().isNotEmpty) ('Nama Bus', busName.trim()),
+          ('Nama Bus', busName),
           ('No. Polisi', r.noPolisi),
-          ('KM Awal', formatNumberId(r.kmAwal)),
-          ('KM Akhir', formatNumberId(r.kmAkhir)),
         ]
       ),
       (
@@ -479,15 +476,12 @@ class ReportPdfBuilder {
   }
 
   static pw.Widget _buildGuestBlock(Report r) {
-    final guestName = r.namaTamu.trim();
     final guestSisa = r.guestSisa;
 
     return pw.Column(
       crossAxisAlignment: pw.CrossAxisAlignment.start,
       children: [
-        _buildSection(
-          guestName.isEmpty ? 'Uang Saku Tamu' : 'Uang Saku Tamu $guestName',
-        ),
+        _buildSection('Uang Saku Discova'),
         pw.Table(
           columnWidths: const {
             0: pw.FixedColumnWidth(22),
@@ -519,7 +513,7 @@ class ReportPdfBuilder {
               decoration: _rule(0.9, _ink, top: true),
               children: [
                 _cell(''),
-                _cell('Total Pengeluaran Tamu', style: _tableBold),
+                _cell('Total Pengeluaran Discova', style: _tableBold),
                 _cell(formatNumberId(r.guestTotalPengeluaran),
                     style: _tableBold, align: pw.TextAlign.right),
               ],
@@ -527,14 +521,14 @@ class ReportPdfBuilder {
           ],
         ),
         pw.SizedBox(height: 8),
-        _balanceRow('Uang Saku Tamu', formatRupiah(r.guestUangSaku)),
+        _balanceRow('Uang Saku Discova', formatRupiah(r.guestUangSaku)),
         pw.SizedBox(height: 5),
         pw.Row(
           mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
           crossAxisAlignment: pw.CrossAxisAlignment.end,
           children: [
             pw.Text(
-              guestSisa >= 0 ? 'SISA TAMU' : 'DEFISIT TAMU',
+              guestSisa >= 0 ? 'SISA DISCOVA' : 'DEFISIT DISCOVA',
               style: _balanceLabel,
             ),
             pw.Text(
