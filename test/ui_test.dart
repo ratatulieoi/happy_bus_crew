@@ -2118,7 +2118,7 @@ void main() {
   });
 
   testWidgets(
-      'history searches fixed bus names and plates and filters deficits',
+      'history searches fixed bus names and plates and filters by bus',
       (tester) async {
     await pumpScreen(tester, const HomeScreen());
     final search = find.byType(TextField);
@@ -2133,7 +2133,8 @@ void main() {
     expect(find.text('HG 3 • Dedi'), findsNothing);
     await tester.tap(find.byTooltip('Hapus pencarian'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(FilterChip, 'Defisit'));
+    expect(find.widgetWithText(FilterChip, 'Defisit'), findsNothing);
+    await tester.tap(find.widgetWithText(ChoiceChip, 'HG 3'));
     await tester.pumpAndSettle();
     expect(find.text('HG 3 • Dedi'), findsOneWidget);
     expect(find.text('HG 2 • Budi Santoso'), findsNothing);

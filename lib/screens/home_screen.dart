@@ -23,7 +23,6 @@ class _HomeScreenState extends State<HomeScreen> {
   final _search = TextEditingController();
   List<Report> _reports = [];
   String? _filterPlate;
-  bool _deficitOnly = false;
   bool _loading = true;
   bool _opening = false;
   String? _error;
@@ -80,7 +79,6 @@ class _HomeScreenState extends State<HomeScreen> {
     final query = _search.text.trim().toLowerCase();
     return _reports.where((r) {
       if (_filterPlate != null && r.noPolisi != _filterPlate) return false;
-      if (_deficitOnly && r.sisa >= 0) return false;
       final busName = busNameForPlate(r.noPolisi);
       return '${r.noPolisi} $busName ${r.pengemudi} ${r.kernet} ${r.namaCrew} ${r.hariTglBerangkat} ${formatTanggalPendek(r.tanggalBuat)}'
           .toLowerCase()
@@ -184,11 +182,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                         selected: _filterPlate == bus.plate,
                                         onSelected: (_) => setState(
                                             () => _filterPlate = bus.plate)),
-                                  FilterChip(
-                                      label: const Text('Defisit'),
-                                      selected: _deficitOnly,
-                                      onSelected: (selected) => setState(
-                                          () => _deficitOnly = selected)),
                                 ]),
                                 const SizedBox(height: 16),
                                 if (_opening)
@@ -220,7 +213,6 @@ class _HomeScreenState extends State<HomeScreen> {
                                           _search.clear();
                                           setState(() {
                                             _filterPlate = null;
-                                            _deficitOnly = false;
                                           });
                                         },
                                         child: const Text('Reset pencarian')),
