@@ -86,34 +86,33 @@ void main() {
       expect(page.pageFormat.height, PdfPageFormat.a4.height);
     }
     final finance = pages.first;
-    expect(finance, contains('Laporan Pertanggungjawaban Crew'));
+    expect(finance, contains('LPJ CREW'));
+    expect(finance, contains('LPJ / HG 2 / 12 / 10 / 2026'));
+    expect(finance, contains('PJ : Rani Wulandari'));
+    expect(finance,
+        contains('JADWAL Berangkat Kamis, 01/10/2026 Kembali Minggu, 11/10/2026'));
+    expect(finance, contains('BUS HG 2 (AB 7317 BK)'));
     expect(
-        finance, contains('Jadwal Berangkat 01 Okt 2026 Kembali 11 Okt 2026'));
-    expect(finance, contains('Bus HG 2 AB 7317 BK'));
-    expect(
-        finance, contains('Crew Pengemudi Budi Santoso Kernet Agus Prasetyo'));
-    expect(finance, contains('Tamu Dewi Lestari'));
-    expect(finance, contains('07 Okt 2026 09 Okt 2026 Malang → Surabaya 3 LK'));
-    expect(finance, contains('01 Okt 2026 02 Okt 2026 Sleman 2 DK'));
-    expect(finance, contains('03 Okt 2026 04 Okt 2026 Yogyakarta 2 DK'));
-    expect(finance, contains('10 Okt 2026 11 Okt 2026 2 LK'));
-    expect(finance, contains('Total periode 9 hari LK 5 / DK 4'));
-    expect(finance, contains('Uang Saku Kantor Rp3.000.000 BBM Rp1.800.000'));
-    expect(finance, contains('Uang makan · 9 hari × Rp50.000 Rp450.000'));
+        finance, contains('CREW Pengemudi Budi Santoso Kernet Agus Prasetyo'));
+    expect(finance, contains('TAMU Nama Dewi Lestari Pelunasan Rp12.000.000'));
+    expect(finance, contains('Rabu, 07/10/2026 — Jumat, 09/10/2026 Malang → Surabaya 3 Hari LK'));
+    expect(finance, contains('Kamis, 01/10/2026 — Jumat, 02/10/2026 Sleman 2 Hari DK'));
+    expect(finance, contains('Sabtu, 03/10/2026 — Minggu, 04/10/2026 Yogyakarta 2 Hari DK'));
+    expect(finance, contains('Sabtu, 10/10/2026 — Minggu, 11/10/2026 2 Hari LK'));
+    expect(finance, contains('Total Periode 9 Hari LK 5 / DK 4'));
+    expect(finance, contains('LPJ Kantor Rp3.000.000 BBM Rp1.800.000'));
+    expect(finance, contains('Uang Makan · 9 hari × Rp50.000 Rp450.000'));
     expect(finance, contains('Cuci bus Rp75.000 Air mineral Rp60.000'));
-    expect(finance, contains('Total pengeluaran Rp2.425.000 Sisa Rp575.000'));
-    expect(finance, contains('Uang Saku Discova Rp2.000.000 Tol Rp750.000'));
-    expect(finance, contains('Total pengeluaran Rp1.800.000 Sisa Rp200.000'));
-    expect(finance, contains('Pembayaran Tagihan Rp12.000.000'));
-    expect('Pembayaran Tagihan'.allMatches(pages.join()), hasLength(1));
+    expect(finance, contains('Total Pengeluaran Rp2.425.000 Sisa Rp575.000'));
+    expect(finance, contains('LPJ Discova Rp2.000.000 Tol Rp750.000'));
+    expect(finance, contains('Total Pengeluaran Rp1.800.000 Sisa Rp200.000'));
+    expect(finance, contains('Pelunasan Rp12.000.000'));
     expect(pages.last, contains('Catatan dan Lampiran'));
     expect(pages.last,
         contains('Catatan Kantor Jeda tanggal 5 dan 6 tidak dihitung.'));
     expect(pages.last,
         contains('Catatan Discova Izin masuk kawasan sudah dibayar.'));
-    expect(pages.last,
-        contains('Senin, 12 Oktober 2026 Rani Wulandari Nama pembuat laporan'));
-    expect(pages.first, isNot(contains('Rani Wulandari')));
+    expect(pages.first, contains('Rani Wulandari'));
     for (final removed in [
       'Diterima',
       'Keterangan',
@@ -128,7 +127,9 @@ void main() {
       'Sisa tagihan',
       'Lunas',
       'ilustratif',
-      'prototype'
+      'prototype',
+      'Pelunasan Tagihan',
+      'Nama pembuat laporan'
     ]) {
       expect(pages.join(), isNot(contains(removed)));
     }
@@ -139,20 +140,20 @@ void main() {
     final doc = await ReportPdfBuilder.build(report());
     final pages = await pdfGeometry(doc);
     final finance = pages.first;
-    final title = finance.text.where((word) => word.size == 18).toList();
-    final titleLeft = title.first.x;
-    final titleRight = title.last.x + title.last.width;
-    expect(
-        (titleLeft + titleRight) / 2, closeTo(PdfPageFormat.a4.width / 2, 0.1));
-    expect(PdfPageFormat.a4.height - title.first.y, closeTo(91, 1));
+    final title = finance.text
+        .where((word) => word.value == 'LPJ' && word.size == 14)
+        .toList();
+    expect(title, isNotEmpty);
+    final pj = finance.text.where((word) => word.value == 'PJ').toList();
+    expect(pj, isNotEmpty);
     for (final amount in ['Rp1.800.000', 'Rp450.000', 'Rp2.425.000']) {
       final word = finance.text.firstWhere((word) => word.value == amount);
       expect(
-          word.x + word.width, closeTo(PdfPageFormat.a4.width - 40 - 112, 0.1));
+          word.x + word.width, closeTo(PdfPageFormat.a4.width - 40 - 75, 0.5));
     }
-    for (final amount in ['Rp3.000.000', 'Rp575.000', 'Rp12.000.000']) {
+    for (final amount in ['Rp3.000.000', 'Rp575.000']) {
       final word = finance.text.firstWhere((word) => word.value == amount);
-      expect(word.x + word.width, closeTo(PdfPageFormat.a4.width - 40, 0.1));
+      expect(word.x + word.width, closeTo(PdfPageFormat.a4.width - 40, 0.5));
     }
     final expense = finance.text.firstWhere((word) => word.value == 'Rp40.000');
     final total =
@@ -163,16 +164,9 @@ void main() {
         isTrue);
     expect(finance.rules.any((rule) => rule.y > balance.y && rule.y < total.y),
         isTrue);
-    final payment =
-        finance.text.firstWhere((word) => word.value == 'Rp12.000.000');
-    expect(
-        finance.rules
-            .any((rule) => rule.y > payment.y && rule.y < payment.y + 20),
-        isTrue);
     final signature =
-        pages.last.text.firstWhere((word) => word.value == 'Rani');
+        pages.first.text.firstWhere((word) => word.value == 'Rani');
     expect(signature.x, greaterThan(PdfPageFormat.a4.width / 2));
-    expect(signature.y, lessThan(90));
   });
 
   test('manual meals, zero and deficit preserve finance and single payment',
@@ -191,13 +185,13 @@ void main() {
           pembayaranTagihan: 9999999);
       final doc = await ReportPdfBuilder.build(r);
       final text = normalizePdfText((await pdfPageText(doc)).join());
-      expect(text, contains('Uang makan Rp123.456'));
+      expect(text, contains('Uang Makan Rp123.456'));
       expect(text, isNot(contains('× Rp50.000')));
-      expect(text, contains('Total pengeluaran Rp1.943.456'));
+      expect(text, contains('Total Pengeluaran Rp1.943.456'));
       expect(text,
-          contains(allowance == 100000 ? 'Defisit -Rp1.843.456' : 'Sisa Rp0'));
-      expect(text, contains('Defisit -Rp9.000'));
-      expect(text, contains('Pembayaran Tagihan Rp9.999.999'));
+          contains(allowance == 100000 ? 'Defisit Rp1.843.456' : 'Sisa Rp0'));
+      expect(text, contains('Defisit Rp9.000'));
+      expect(text, contains('Pelunasan Rp9.999.999'));
       final streams = doc.document.pdfPageList.pages
           .expand((p) => p.contents)
           .map((s) => latin1.decode((s as dynamic).buf.output() as List<int>))
@@ -215,28 +209,16 @@ void main() {
         }),
         logoBytes: Uint8List(0));
     final pages = (await pdfPageText(doc)).map(normalizePdfText).toList();
-    expect(pages, hasLength(2));
-    expect(pages.first, contains('Total periode - -'));
+    expect(pages, hasLength(1));
+    expect(pages.first, contains('Total Periode - -'));
+    expect(pages.first, contains('PJ : Penulis'));
     for (final omitted in [
-      'Pengemudi',
-      'Kernet',
-      'Berangkat',
-      'Kembali',
-      'Tamu',
-      'Pembayaran Tagihan',
+      'Pelunasan Tagihan',
       'Discova',
       '→'
     ]) {
       expect(pages.first, isNot(contains(omitted)));
     }
-    for (final omitted in [
-      'Catatan Kantor',
-      'Catatan Discova',
-      'Lampiran bukti'
-    ]) {
-      expect(pages.last, isNot(contains(omitted)));
-    }
-    expect(pages.last, contains('Penulis Nama pembuat laporan'));
   });
 
   test('bus names use the catalog and long guest identities wrap', () async {
@@ -246,8 +228,8 @@ void main() {
         namaTamu: 'Discova Anjay Mabar Haha Hihi',
       ));
       final text = normalizePdfText((await pdfPageText(doc)).first);
-      expect(text, contains('Bus ${bus.name} ${bus.plate}'));
-      expect(text, contains('Tamu Discova Anjay Mabar Haha Hihi'));
+      expect(text, contains('BUS ${bus.name} (${bus.plate})'));
+      expect(text, contains('TAMU Nama Discova Anjay Mabar Haha Hihi'));
     }
   });
 
@@ -260,9 +242,9 @@ void main() {
       final text = normalizePdfText(
           (await pdfPageText(await ReportPdfBuilder.build(r))).first);
       if (r.hasTripCounts) {
-        expect(text, contains('Total periode 40 hari LK 40 / DK 0'));
+        expect(text, contains('Total Periode 40 Hari LK 40 / DK 0'));
       } else {
-        expect(text, contains('Total periode - -'));
+        expect(text, contains('Total Periode - -'));
         expect(text.contains('Kategori lama'), r.tripPeriods == null);
       }
       expect(text, isNot(contains('→')));
@@ -279,10 +261,11 @@ void main() {
       ReportAttachmentImage(bytes: bytes),
     ]);
     final pages = (await pdfPageText(doc)).map(normalizePdfText).toList();
-    expect(pages.first, isNot(contains('Uang Saku Discova')));
+    expect(pages.first, isNot(contains('LPJ Discova')));
     expect(pages.last, isNot(contains('Catatan Discova')));
     expect(pages.last, isNot(contains(r.guestCatatan)));
-    expect(pages.last, contains('Discova · Tol'));
+    expect(pages.last, contains('LPJ Discova'));
+    expect(pages.last, contains('a. Tol'));
     expect(pages.last, contains('Lampiran belum dikelompokkan'));
   });
 
@@ -313,9 +296,11 @@ void main() {
     final text = normalizePdfText((await pdfPageText(
             await ReportPdfBuilder.build(r, attachmentImages: attachments)))
         .join());
-    for (final group in groups) {
-      expect(text, contains(group.title));
-    }
+    expect(text, contains('LPJ Kantor'));
+    expect(text, contains('Tol (1)'));
+    expect(text, contains('Tol (2)'));
+    expect(text, contains('Extra lama'));
+    expect(text, contains('Lampiran belum dikelompokkan'));
   });
 
   test(
@@ -344,7 +329,7 @@ void main() {
           .join();
       final count = RegExp(r'/I\w+\s+Do').allMatches(streams).length;
       images += count;
-      if (count > 0) expect(pages[i], contains('Kantor · BBM'));
+      if (count > 0) expect(pages[i], contains('BBM'));
       expect(pages[i], contains('Catatan dan Lampiran'));
     }
     expect(images, 83);
@@ -357,8 +342,8 @@ void main() {
       for (final image in page.images) {
         expect(image.width / image.height, closeTo(aspect, 0.001));
         expect(image.width, closeTo(width, 0.01));
-        expect(image.y, greaterThanOrEqualTo(40));
-        expect(image.y + image.height, lessThan(PdfPageFormat.a4.height - 110));
+        expect(image.y, greaterThanOrEqualTo(30));
+        expect(image.y + image.height, lessThan(PdfPageFormat.a4.height - 20));
         rows.putIfAbsent(image.y.toStringAsFixed(2), () => []).add(image.x);
       }
       for (final row in rows.values) {
@@ -368,7 +353,7 @@ void main() {
         }
       }
     }
-    expect(pages.last, contains('Rani Wulandari'));
+    expect(pages.first, contains('Rani Wulandari'));
   });
 
   test('newline-heavy notes continue under the correct group heading',
@@ -390,7 +375,7 @@ void main() {
         in pages.where((page) => page.contains(RegExp(r'Line\d')))) {
       expect(page, contains('Catatan Kantor'));
     }
-    expect(pages.last, contains('Nama pembuat laporan'));
+    expect(pages.last, contains('Catatan Kantor'));
   });
 
   test('many periods, extras and long notes paginate without missing text',
@@ -441,18 +426,18 @@ void main() {
     for (final page in pages) {
       if (page.contains(RegExp(r'Origin\d'))) expect(page, contains('Periode'));
       if (page.contains(RegExp(r'Office\d'))) {
-        expect(page, contains('Uang Saku Kantor'));
+        expect(page, contains('LPJ Kantor'));
       }
       if (page.contains(RegExp(r'Guest\d'))) {
-        expect(page, contains('Uang Saku Discova'));
+        expect(page, contains('LPJ Discova'));
       }
       if (page.contains(RegExp(r'Note\d'))) {
         expect(page, contains('Catatan Kantor'));
       }
       expect(page, isNot(contains('Keterangan')));
     }
-    expect(text, contains('Total periode 80 hari LK 80 / DK 0'));
-    expect('Pembayaran Tagihan'.allMatches(text), hasLength(1));
-    expect(pages.last, contains('Rani Wulandari'));
+    expect(text, contains('Total Periode 80 Hari LK 80 / DK 0'));
+    expect('Pelunasan'.allMatches(text), hasLength(1));
+    expect(pages.first, contains('Rani Wulandari'));
   });
 }

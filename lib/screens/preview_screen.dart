@@ -207,10 +207,6 @@ class _PreviewScreenState extends State<PreviewScreen> {
               Text(
                   '${formatTanggalPendek(widget.report.tanggalBuat)} • ${widget.attachmentImages.length} bukti terlampir',
                   style: const TextStyle(color: AppColors.muted)),
-              const SizedBox(height: 8),
-              const Text(
-                  'Cubit atau ketuk dua kali untuk zoom. Geser untuk melihat detail, gunakan panah untuk berpindah halaman.',
-                  style: TextStyle(color: AppColors.muted, fontSize: 12)),
               const SizedBox(height: 12),
               Expanded(
                 child: ClipRRect(

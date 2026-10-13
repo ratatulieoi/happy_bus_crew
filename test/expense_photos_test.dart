@@ -241,9 +241,9 @@ void main() {
     final draftPdf = await ReportPdfBuilder.build(draft.report,
         attachmentImages: draft.attachmentImages);
     final text = normalizePdfText((await pdfPageText(draftPdf)).join(' '));
-    expect(text, contains('Kantor · Parkir'));
-    expect(text, contains('Kantor · Tol'));
-    expect(text, contains('Kantor · BBM'));
+    expect(text, contains('c. Parkir'));
+    expect(text, contains('d. Tol'));
+    expect(text, contains('a. BBM'));
     expect(links, isEmpty);
     expect(tester.takeException(), isNull);
   });
@@ -381,10 +381,12 @@ void main() {
       final pdf = await ReportPdfBuilder.build(preview.report,
           attachmentImages: preview.attachmentImages);
       final text = normalizePdfText((await pdfPageText(pdf)).join(' '));
-      expect(text, contains('Kantor · Parkir'));
-      expect(text, contains('Discova · Tol'));
-      expect(text, contains('Discova · Penyeberangan'));
-      expect(text, contains('Discova · Parkir'));
+      expect(text, contains('LPJ Kantor'));
+      expect(text, contains('a. Parkir'));
+      expect(text, contains('LPJ Discova'));
+      expect(text, contains('a. Tol'));
+      expect(text, contains('b. Penyeberangan'));
+      expect(text, contains('c. Parkir'));
       expect(text, isNot(contains('Uang Saku Discova')));
     }
     Navigator.of(tester.element(find.byType(PreviewScreen))).pop();

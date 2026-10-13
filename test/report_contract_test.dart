@@ -210,7 +210,7 @@ void main() {
       final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
       expect(
           text,
-          contains('Total periode ${counts[0] + counts[1]} hari '
+          contains('Total Periode ${counts[0] + counts[1]} Hari '
               'LK ${counts[0]} / DK ${counts[1]}'));
       expect(text, isNot(contains('Kategori lama')));
     }
@@ -225,7 +225,7 @@ void main() {
         'dalam_kota_count': null,
       }).copyWith(tripType: type));
       final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
-      expect(text, contains('Total periode - -'));
+      expect(text, contains('Total Periode - -'));
       if (type == TripType.unspecified) {
         expect(text, isNot(contains('Kategori lama')));
       } else {
@@ -371,15 +371,15 @@ void main() {
     final doc = await ReportPdfBuilder.build(report());
     final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
     expect(text, contains('BBM Rp600.000'));
-    expect(text, contains('Uang makan · 2 hari × Rp50.000 Rp100.000'));
+    expect(text, contains('Uang Makan · 2 hari × Rp50.000 Rp100.000'));
     expect(text, contains('Parkir Rp20.000'));
     expect(text, contains('Tol Rp30.000'));
-    expect(text.indexOf('BBM'), lessThan(text.indexOf('Uang makan')));
-    expect(text.indexOf('Uang makan'), lessThan(text.indexOf('Parkir')));
+    expect(text.indexOf('BBM'), lessThan(text.indexOf('Uang Makan')));
+    expect(text.indexOf('Uang Makan'), lessThan(text.indexOf('Parkir')));
     expect(text.indexOf('Parkir'), lessThan(text.indexOf('Tol')));
-    expect(text, contains('Total pengeluaran Rp750.000'));
+    expect(text, contains('Total Pengeluaran Rp750.000'));
     expect(text, contains('Sisa Rp250.000'));
-    expect(text, contains('Pembayaran Tagihan Rp50.000'));
+    expect(text, contains('Pelunasan Rp50.000'));
   });
 
   test('manual meal amount round-trips into PDF expenses and office balance',
@@ -396,11 +396,11 @@ void main() {
       expect(reopened.copyWith(tripPeriods: []).uangMakan, amount);
       final doc = await ReportPdfBuilder.build(reopened);
       final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
-      expect(text, contains('Uang makan Rp${formatNumberId(amount)}'));
+      expect(text, contains('Uang Makan Rp${formatNumberId(amount)}'));
       expect(text,
-          contains('Total pengeluaran Rp${formatNumberId(650000 + amount)}'));
+          contains('Total Pengeluaran Rp${formatNumberId(650000 + amount)}'));
       expect(text, contains('Sisa Rp${formatNumberId(350000 - amount)}'));
-      expect(text, contains('Pembayaran Tagihan Rp50.000'));
+      expect(text, contains('Pelunasan Rp50.000'));
       expect(text, contains('Sisa Rp190.000'));
     }
   });
