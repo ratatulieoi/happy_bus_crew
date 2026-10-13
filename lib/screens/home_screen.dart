@@ -131,14 +131,10 @@ class _HomeScreenState extends State<HomeScreen> {
                               child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                Text('Laporan crew',
+                                Text('LPJ Crew',
                                     style: Theme.of(context)
                                         .textTheme
                                         .headlineLarge),
-                                const SizedBox(height: 6),
-                                const Text(
-                                    'Catat perjalanan dan kelola pengeluaran bus.',
-                                    style: TextStyle(color: AppColors.muted)),
                                 const SizedBox(height: 24),
                                 Row(children: [
                                   Expanded(

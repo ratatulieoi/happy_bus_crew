@@ -195,7 +195,7 @@ void main() {
       'repeated gallery adds, viewing and removal stay with each expense',
       (tester) async {
     await pump(tester, FormScreen(report: saved));
-    await tap(tester, find.text('2. Keuangan Kantor'));
+    await tap(tester, find.text('2. LPJ Kantor'));
     for (final owner in [bbm, meal, first, second]) {
       expect(count(tester, owner), 0);
     }
@@ -263,7 +263,7 @@ void main() {
       await tap(
           tester,
           find.text(
-              owner == guest ? '3. Keuangan Discova' : '2. Keuangan Kantor'));
+              owner == guest ? '3. LPJ Discova' : '2. LPJ Kantor'));
       expect(count(tester, owner), 1);
       await tap(tester, find.text('Hapus').first);
       expect(find.text('Hapus extra beserta fotonya?'), findsOneWidget);
@@ -290,7 +290,7 @@ void main() {
       (tester) async {
     links = [ReportAttachment(filePath: sources[0].path, owner: bbm)];
     await pump(tester, FormScreen(report: saved));
-    await tap(tester, find.text('2. Keuangan Kantor'));
+    await tap(tester, find.text('2. LPJ Kantor'));
     await tap(tester, button(bbm));
     await tap(tester, find.byTooltip('Hapus foto 1'));
     await tap(tester, find.text('Selesai'));
@@ -309,11 +309,11 @@ void main() {
     await tester.tap(find.byType(PopupMenuButton<String>).first);
     await tester.pumpAndSettle();
     await tap(tester, find.text('Ubah laporan'));
-    await tap(tester, find.text('2. Keuangan Kantor'));
+    await tap(tester, find.text('2. LPJ Kantor'));
     await add(tester, first, [sources[0]]);
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Nama extra 1'), 'Parkir');
-    await tap(tester, find.text('3. Keuangan Discova'));
+    await tap(tester, find.text('3. LPJ Discova'));
     for (final owner in [
       tol,
       const ExpenseOwner(ExpenseType.discovaCrossing),
@@ -324,13 +324,13 @@ void main() {
     }
     await tap(tester, find.text('1. Periode'));
     await tap(tester, find.text('Tamu Discova'));
-    expect(find.text('3. Keuangan Discova'), findsNothing);
-    await tap(tester, find.text('3. Penyelesaian'));
-    expect(find.text('Penyelesaian'), findsOneWidget);
+    expect(find.text('3. LPJ Discova'), findsNothing);
+    await tap(tester, find.text('3. Penanggungjawab'));
+    expect(find.text('Penanggungjawab'), findsNWidgets(2));
     expect(find.widgetWithText(TextFormField, 'Nama crew'), findsOneWidget);
     expect(
         find.widgetWithText(TextFormField, 'Catatan tambahan'), findsOneWidget);
-    expect(find.text('Defisit kantor'), findsOneWidget);
+    expect(find.text('Defisit Kantor'), findsOneWidget);
     expect(find.text('Periksa pratinjau PDF'), findsOneWidget);
     expect(find.text('Galeri'), findsNothing);
     expect(find.text('Kamera'), findsNothing);
@@ -394,10 +394,10 @@ void main() {
     await tester.tap(find.byType(PopupMenuButton<String>).first);
     await tester.pumpAndSettle();
     await tap(tester, find.text('Ubah laporan'));
-    await tap(tester, find.text('2. Keuangan Kantor'));
+    await tap(tester, find.text('2. LPJ Kantor'));
     expect(count(tester, first), 1);
     expect(count(tester, second), 0);
-    await tap(tester, find.text('3. Keuangan Discova'));
+    await tap(tester, find.text('3. LPJ Discova'));
     expect(count(tester, guest), 1);
     expect(count(tester, tol), 1);
     expect(tester.takeException(), isNull);
@@ -407,7 +407,7 @@ void main() {
       (tester) async {
     saved = saved.copyWith(extras: []);
     await pump(tester, FormScreen(report: saved));
-    await tap(tester, find.text('2. Keuangan Kantor'));
+    await tap(tester, find.text('2. LPJ Kantor'));
     await tap(tester, find.text('Tambah Extra'));
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Nama extra 1'), 'Tol');
@@ -423,8 +423,8 @@ void main() {
         .singleWhere((owner) => owner.type == ExpenseType.officeExtra);
     final original = addedOwner();
     await add(tester, original, [sources[0]]);
-    await tap(tester, find.text('4. Penyelesaian'));
-    await tap(tester, find.text('2. Keuangan Kantor'));
+    await tap(tester, find.text('4. Penanggungjawab'));
+    await tap(tester, find.text('2. LPJ Kantor'));
     expect(addedOwner(), original);
     expect(count(tester, original), 1);
     await tap(tester, find.text('Hapus'));
@@ -445,9 +445,9 @@ void main() {
 
   testWidgets('save failure retains the photo draft for retry', (tester) async {
     await pump(tester, FormScreen(report: saved));
-    await tap(tester, find.text('2. Keuangan Kantor'));
+    await tap(tester, find.text('2. LPJ Kantor'));
     await add(tester, bbm, [sources[0]]);
-    await tap(tester, find.text('4. Penyelesaian'));
+    await tap(tester, find.text('4. Penanggungjawab'));
     failSaving = true;
     await tester.tap(find.text('Simpan laporan'));
     for (var i = 0;
@@ -462,7 +462,7 @@ void main() {
     expect(find.text('Gagal menyimpan. Isian tetap ada. Coba lagi.'),
         findsOneWidget);
     expect(links, isEmpty);
-    await tap(tester, find.text('2. Keuangan Kantor'));
+    await tap(tester, find.text('2. LPJ Kantor'));
     expect(count(tester, bbm), 1);
     expect(await tester.runAsync(() => sources[0].exists()), isTrue);
     expect(
@@ -475,7 +475,7 @@ void main() {
       (tester) async {
     links = [ReportAttachment(filePath: sources[0].path, owner: bbm)];
     await pump(tester, FormScreen(report: saved));
-    await tap(tester, find.text('2. Keuangan Kantor'));
+    await tap(tester, find.text('2. LPJ Kantor'));
     await tap(tester, button(bbm));
     await tap(tester, find.text('Galeri'));
     expect(find.text('1 foto'), findsOneWidget);

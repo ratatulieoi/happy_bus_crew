@@ -441,7 +441,7 @@ void main() {
     await selectBus(tester, label: 'HG 6 • AB 7497 BK');
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Keuangan Kantor'), findsOneWidget);
+    expect(find.text('LPJ Kantor'), findsOneWidget);
     await tester.tap(find.text('Kembali'));
     await tester.pumpAndSettle();
     expect(tester.widget<DropdownButtonFormField<String>>(field).initialValue,
@@ -462,9 +462,9 @@ void main() {
     await tester.tap(find.text('Tamu Discova'));
     await tester.pumpAndSettle();
     for (final label in [
-      '2. Keuangan Kantor',
-      '3. Keuangan Discova',
-      '4. Penyelesaian'
+      '2. LPJ Kantor',
+      '3. LPJ Discova',
+      '4. Penanggungjawab'
     ]) {
       await tester.tap(find.text(label));
       await tester.pumpAndSettle();
@@ -478,8 +478,8 @@ void main() {
     expect(savedReport, isNull);
     await selectBus(tester, label: 'HG 4 • AB 7403 BK');
     expect(find.text('Pilih bus terlebih dahulu.'), findsNothing);
-    await reveal(tester, find.text('4. Penyelesaian'));
-    await tester.tap(find.text('4. Penyelesaian'));
+    await reveal(tester, find.text('4. Penanggungjawab'));
+    await tester.tap(find.text('4. Penanggungjawab'));
     await tester.pumpAndSettle();
     expect(find.text('Simpan laporan'), findsOneWidget);
     expect(tester.takeException(), isNull);
@@ -489,8 +489,8 @@ void main() {
       (tester) async {
     await pumpScreen(tester, const FormScreen());
     await selectBus(tester);
-    await reveal(tester, find.text('3. Penyelesaian'));
-    await tester.tap(find.text('3. Penyelesaian'));
+    await reveal(tester, find.text('3. Penanggungjawab'));
+    await tester.tap(find.text('3. Penanggungjawab'));
     await tester.pumpAndSettle();
     final save = tester
         .widget<FilledButton>(find.ancestor(
@@ -570,7 +570,7 @@ void main() {
     failQueries = false;
     await tester.tap(find.text('Coba lagi'));
     await tester.pumpAndSettle();
-    expect(find.text('Laporan crew'), findsOneWidget);
+    expect(find.text('LPJ Crew'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
@@ -585,14 +585,14 @@ void main() {
         )));
     final headings = [
       'Periode',
-      'Keuangan Kantor',
-      'Keuangan Discova',
-      'Penyelesaian'
+      'LPJ Kantor',
+      'LPJ Discova',
+      'Penanggungjawab'
     ];
     final fields = [
       'Nama tamu',
-      'Uang saku',
-      'Uang saku diterima',
+      'Uang sangu kantor',
+      'Uang sangu Discova',
       'Nama crew'
     ];
     for (var step = 0; step < headings.length; step++) {
@@ -659,16 +659,16 @@ void main() {
     await tester.pumpAndSettle();
     await capture(tester, 'report-finance');
     await tester.enterText(
-        find.widgetWithText(TextFormField, 'Uang saku'), '1000000');
-    await reveal(tester, find.text('Sisa uang kantor'));
+        find.widgetWithText(TextFormField, 'Uang sangu kantor'), '1000000');
+    await reveal(tester, find.text('Sisa Uang Kantor'));
     expect(find.text('Rp 950.000'), findsOneWidget);
     expect(find.text('Rp 50.000'), findsOneWidget);
+    expect(find.text('Sisa Uang Kantor'), findsOneWidget);
+    await tester.tap(find.text('Lanjut'));
+    await tester.pumpAndSettle();
     final paymentField = tester.widget<TextFormField>(
         find.widgetWithText(TextFormField, 'Pembayaran tagihan'));
     expect(paymentField.controller!.text, '100.000');
-    expect(find.text('Sisa uang kantor'), findsOneWidget);
-    await tester.tap(find.text('Lanjut'));
-    await tester.pumpAndSettle();
     expect(find.text('Budi Santoso'), findsOneWidget);
     expect(find.text('Perjalanan lancar.'), findsOneWidget);
     await capture(tester, 'report-attachments');
@@ -731,14 +731,14 @@ void main() {
     await tester.pumpAndSettle();
     await selectBus(tester);
     await reveal(
-        tester, find.widgetWithText(ChoiceChip, '3. Keuangan Discova'));
-    expect(find.text('3. Keuangan Discova'), findsOneWidget);
+        tester, find.widgetWithText(ChoiceChip, '3. LPJ Discova'));
+    expect(find.text('3. LPJ Discova'), findsOneWidget);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     for (final label in [
-      'Uang saku diterima',
+      'Uang sangu Discova',
       'Tol',
       'Penyeberangan',
       'Parkir',
@@ -748,7 +748,7 @@ void main() {
     }
 
     for (final entry in {
-      'Uang saku diterima': '100000',
+      'Uang sangu Discova': '100000',
       'Tol': '10000',
       'Penyeberangan': '20000',
       'Parkir': '5000',
@@ -796,7 +796,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('3. Keuangan Discova'), findsOneWidget);
+    expect(find.text('3. LPJ Discova'), findsOneWidget);
 
     await reveal(tester, find.text('Tambah Extra Discova'));
     await tester.tap(find.text('Tambah Extra Discova'));
@@ -809,7 +809,7 @@ void main() {
     await reveal(tester, find.text('LANGKAH 3 DARI 4'));
     expect(find.text('LANGKAH 3 DARI 4'), findsOneWidget);
     expect(find.text('Simpan laporan'), findsNothing);
-    expect(find.text('Penyelesaian'), findsNothing);
+    expect(find.text('Penanggungjawab'), findsNothing);
 
     final price = find.widgetWithText(TextFormField, 'Harga extra Discova 1');
     await reveal(tester, price);
@@ -828,7 +828,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Penyelesaian'), findsOneWidget);
+    expect(find.text('Penanggungjawab'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -847,12 +847,12 @@ void main() {
       final identity = find.widgetWithText(TextFormField, 'Nama tamu');
       await reveal(tester, identity);
       await tester.enterText(identity, name);
-      await reveal(tester, find.text('3. Keuangan Discova'));
-      await tester.tap(find.text('3. Keuangan Discova'));
+      await reveal(tester, find.text('3. LPJ Discova'));
+      await tester.tap(find.text('3. LPJ Discova'));
       await tester.pumpAndSettle();
-      expect(find.text('Keuangan Discova'), findsOneWidget);
+      expect(find.text('LPJ Discova'), findsOneWidget);
 
-      for (final title in ['Uang saku Discova', 'Pengeluaran Discova']) {
+      for (final title in ['Uang Sangu Discova', 'Pengeluaran Discova']) {
         final heading = find.widgetWithText(SectionHeading, title);
         await reveal(tester, heading);
         expect(tester.widget<SectionHeading>(heading).title, title);
@@ -867,14 +867,14 @@ void main() {
       }
       await reveal(tester, find.text('Tambah Extra Discova'));
       expect(find.text('Tambah Extra Discova'), findsOneWidget);
-      await reveal(tester, find.text('Sisa uang Discova'));
-      expect(find.text('Sisa uang Discova'), findsOneWidget);
-      expect(find.text('Total pengeluaran Discova'), findsOneWidget);
+      await reveal(tester, find.text('Sisa Uang Discova'));
+      expect(find.text('Sisa Uang Discova'), findsOneWidget);
+      expect(find.text('Total Pengeluaran Discova'), findsOneWidget);
       expect(find.text('Rp 87.000'), findsOneWidget);
       for (final title in [
-        'Uang saku Discova',
+        'Uang Sangu Discova',
         'Pengeluaran Discova',
-        'Sisa uang Discova',
+        'Sisa Uang Discova',
       ]) {
         if (name.isNotEmpty) {
           expect(find.text('$title $name'), findsNothing);
@@ -882,11 +882,11 @@ void main() {
       }
       if (name.isEmpty) {
         final allowance =
-            find.widgetWithText(TextFormField, 'Uang saku diterima');
+            find.widgetWithText(TextFormField, 'Uang sangu Discova');
         await reveal(tester, allowance);
         await tester.enterText(allowance, '1000');
-        await reveal(tester, find.text('Defisit uang Discova'));
-        expect(find.text('Defisit uang Discova'), findsOneWidget);
+        await reveal(tester, find.text('Defisit Uang Discova'));
+        expect(find.text('Defisit Uang Discova'), findsOneWidget);
         expect(find.text('-Rp 12.000'), findsOneWidget);
       }
       await reveal(tester, find.text('1. Periode'));
@@ -920,12 +920,12 @@ void main() {
     await tester.tap(find.text('Tamu Discova'));
     await tester.pumpAndSettle();
     expect(
-        find.widgetWithText(ChoiceChip, '3. Keuangan Discova'), findsNothing);
-    await reveal(tester, find.text('3. Penyelesaian'));
-    expect(find.text('3. Penyelesaian'), findsOneWidget);
+        find.widgetWithText(ChoiceChip, '3. LPJ Discova'), findsNothing);
+    await reveal(tester, find.text('3. Penanggungjawab'));
+    expect(find.text('3. Penanggungjawab'), findsOneWidget);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Uang saku diterima'), findsNothing);
+    expect(find.text('Uang sangu Discova'), findsNothing);
     expect(find.text('Pengeluaran Discova'), findsNothing);
 
     await tester.tap(find.text('Lanjut'));
@@ -980,7 +980,7 @@ void main() {
             .controller!
             .text,
         '150.000');
-    await reveal(tester, find.text('Total pengeluaran'));
+    await reveal(tester, find.text('Total Pengeluaran'));
     expect(find.text('Rp 1.100.000'), findsOneWidget);
     for (var i = 0; i < 2; i++) {
       await reveal(tester, find.text('Hapus').first);
@@ -988,7 +988,7 @@ void main() {
       await tester.pumpAndSettle();
     }
     expect(find.widgetWithText(TextFormField, 'Nama extra 1'), findsNothing);
-    await reveal(tester, find.text('Total pengeluaran'));
+    await reveal(tester, find.text('Total Pengeluaran'));
     expect(find.text('Rp 900.000'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
@@ -1013,10 +1013,10 @@ void main() {
     expect(find.textContaining('Isi nama untuk extra 1'), findsWidgets);
     await fillExtra(tester, 1, 'Parkir', '0');
     // Step chips can bypass Next, but Save must still validate every extra.
-    await tester.scrollUntilVisible(find.text('3. Penyelesaian'), -250,
+    await tester.scrollUntilVisible(find.text('3. Penanggungjawab'), -250,
         scrollable: find.byType(Scrollable).first);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('3. Penyelesaian'));
+    await tester.tap(find.text('3. Penanggungjawab'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Simpan laporan'));
     await tester.pumpAndSettle();
@@ -1025,7 +1025,7 @@ void main() {
     await fillExtra(tester, 1, 'Parkir', '20000');
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Penyelesaian'), findsOneWidget);
+    expect(find.text('Penanggungjawab'), findsWidgets);
     expect(tester.takeException(), isNull);
   });
 
@@ -1132,7 +1132,7 @@ void main() {
     // Empty periods stay optional while drafts remain incomplete.
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Keuangan Kantor'), findsOneWidget);
+    expect(find.text('LPJ Kantor'), findsOneWidget);
     await tester.tap(find.text('Kembali'));
     await tester.pumpAndSettle();
     await addPeriod(tester, DateTime(2026, 6, 12), DateTime(2026, 6, 12),
@@ -1144,7 +1144,7 @@ void main() {
     expect(find.text('LK 1 hari, DK 1 hari.'), findsOneWidget);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Keuangan Kantor'), findsOneWidget);
+    expect(find.text('LPJ Kantor'), findsOneWidget);
     await tester.tap(find.text('Kembali'));
     await tester.pumpAndSettle();
     // Removing the DK row leaves a single remaining period.
@@ -1155,7 +1155,7 @@ void main() {
     // Gaps stay allowed, so Next still passes with the one row.
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Keuangan Kantor'), findsOneWidget);
+    expect(find.text('LPJ Kantor'), findsOneWidget);
     await tester.tap(find.text('Kembali'));
     await tester.pumpAndSettle();
     // Incomplete drafts also block Next with short copy.
@@ -1172,7 +1172,7 @@ void main() {
         TripType.dalamKota);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Keuangan Kantor'), findsOneWidget);
+    expect(find.text('LPJ Kantor'), findsOneWidget);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Simpan laporan'));
@@ -1322,10 +1322,10 @@ void main() {
         isEmpty);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    await reveal(tester, find.text('Keuangan Kantor'));
-    expect(find.text('Keuangan Kantor'), findsOneWidget);
-    await reveal(tester, find.text('3. Penyelesaian'));
-    await tester.tap(find.text('3. Penyelesaian'));
+    await reveal(tester, find.text('LPJ Kantor'));
+    expect(find.text('LPJ Kantor'), findsOneWidget);
+    await reveal(tester, find.text('3. Penanggungjawab'));
+    await tester.tap(find.text('3. Penanggungjawab'));
     await tester.pumpAndSettle();
     expect(find.text('Simpan laporan'), findsOneWidget);
     await tester.tap(find.byTooltip('Pratinjau PDF tanpa menyimpan'));
@@ -1507,7 +1507,7 @@ void main() {
         findsNothing);
     expect(find.ancestor(of: first, matching: find.byType(AnimatedScale)),
         findsOneWidget);
-    final second = find.widgetWithText(ChoiceChip, '2. Keuangan Kantor');
+    final second = find.widgetWithText(ChoiceChip, '2. LPJ Kantor');
     await reveal(tester, second);
     await tester.tap(second);
     await tester.pump();
@@ -1577,7 +1577,7 @@ void main() {
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     expect(find.text('Periode 1: pilih LK atau DK.'), findsWidgets);
-    expect(find.text('Keuangan Kantor'), findsNothing);
+    expect(find.text('LPJ Kantor'), findsNothing);
   });
 
   testWidgets(
@@ -1790,7 +1790,7 @@ void main() {
     final meal = find.widgetWithText(TextFormField, 'Uang makan (3 hari)');
     await reveal(tester, meal);
     expect(tester.widget<TextFormField>(meal).controller!.text, '150.000');
-    await reveal(tester, find.text('Total pengeluaran'));
+    await reveal(tester, find.text('Total Pengeluaran'));
     expect(find.text('Rp 150.000'), findsWidgets);
     await tester.tap(find.byTooltip('Pratinjau PDF tanpa menyimpan'));
     await tester.pump();
@@ -1894,7 +1894,7 @@ void main() {
       await reveal(tester, changedLabel);
       expect(tester.widget<TextFormField>(changedLabel).controller!.text,
           formatted);
-      await reveal(tester, find.text('Total pengeluaran'));
+      await reveal(tester, find.text('Total Pengeluaran'));
       expect(find.text('Rp $formatted'), findsWidgets);
       await tester.tap(find.text('Lanjut'));
       await tester.pumpAndSettle();
@@ -1952,8 +1952,8 @@ void main() {
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     expect(find.text('Periode bertumpuk.'), findsWidgets);
-    await reveal(tester, find.text('3. Penyelesaian'));
-    await tester.tap(find.text('3. Penyelesaian'));
+    await reveal(tester, find.text('3. Penanggungjawab'));
+    await tester.tap(find.text('3. Penanggungjawab'));
     await tester.pumpAndSettle();
     expect(find.text('Simpan laporan'), findsNothing);
     await tester.tap(find.byTooltip('Pratinjau PDF tanpa menyimpan'));
@@ -2093,10 +2093,10 @@ void main() {
     await selectBus(tester);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Keuangan Kantor'), findsOneWidget);
+    expect(find.text('LPJ Kantor'), findsOneWidget);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Penyelesaian'), findsOneWidget);
+    expect(find.text('Penanggungjawab'), findsWidgets);
     await tester.tap(find.text('Simpan laporan'));
     await tester.pumpAndSettle();
     expect(find.byType(HomeScreen), findsOneWidget);
@@ -2113,7 +2113,7 @@ void main() {
     expect(find.text('LK 0 hari, DK 0 hari.'), findsNothing);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Keuangan Kantor'), findsOneWidget);
+    expect(find.text('LPJ Kantor'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
