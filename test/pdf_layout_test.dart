@@ -87,11 +87,11 @@ void main() {
     }
     final finance = pages.first;
     expect(finance, contains('LPJ CREW'));
-    expect(finance, contains('LPJ / HG 2 / 12 / 10 / 2026'));
+    expect(finance, contains('LPJ / HG2 / 12.10.2026'));
     expect(finance, contains('PJ : Rani Wulandari'));
     expect(finance,
         contains('JADWAL Berangkat Kamis, 01/10/2026 Kembali Minggu, 11/10/2026'));
-    expect(finance, contains('BUS HG 2 (AB 7317 BK)'));
+    expect(finance, contains('ARMADA HG2 (AB 7317 BK)'));
     expect(
         finance, contains('CREW Pengemudi Budi Santoso Kernet Agus Prasetyo'));
     expect(finance, contains('TAMU Nama Dewi Lestari Pelunasan Rp12.000.000'));
@@ -163,7 +163,7 @@ void main() {
     expect(finance.rules.any((rule) => rule.y > total.y && rule.y < expense.y),
         isTrue);
     expect(finance.rules.any((rule) => rule.y > balance.y && rule.y < total.y),
-        isTrue);
+        isFalse);
     final signature =
         pages.first.text.firstWhere((word) => word.value == 'Rani');
     expect(signature.x, greaterThan(PdfPageFormat.a4.width / 2));
@@ -228,7 +228,7 @@ void main() {
         namaTamu: 'Discova Anjay Mabar Haha Hihi',
       ));
       final text = normalizePdfText((await pdfPageText(doc)).first);
-      expect(text, contains('BUS ${bus.name} (${bus.plate})'));
+      expect(text, contains('ARMADA ${bus.name} (${bus.plate})'));
       expect(text, contains('TAMU Nama Discova Anjay Mabar Haha Hihi'));
     }
   });
@@ -304,7 +304,7 @@ void main() {
   });
 
   test(
-      'photo rows have five original images with complete overflow and context',
+      'photo rows preserve original images with complete overflow and context',
       () async {
     final bytes = await image();
     final attachments = [
@@ -314,7 +314,7 @@ void main() {
     ];
     final r = report().copyWith(catatan: '', guestCatatan: '');
     final group = ReportPdfBuilder.groupAttachments(r, attachments).single;
-    expect(group.rows.map((row) => row.length), [...List.filled(16, 5), 3]);
+    expect(group.rows.map((row) => row.length), List.filled(83, 1));
     expect(group.rows.expand((row) => row), orderedEquals(attachments));
     expect(
         group.images.every((photo) => identical(photo.bytes, bytes)), isTrue);
@@ -336,20 +336,24 @@ void main() {
     final geometry = await pdfGeometry(doc);
     final source = ByteData.sublistView(bytes);
     final aspect = source.getUint32(16) / source.getUint32(20);
-    final width = (PdfPageFormat.a4.width - 80 - 4 * 11) / 5;
+    final (expectedWidth, _) =
+        ReportPdfBuilder.photoDimensions(attachments.first);
     for (final page in geometry.skip(1)) {
       final rows = <String, List<double>>{};
       for (final image in page.images) {
         expect(image.width / image.height, closeTo(aspect, 0.001));
-        expect(image.width, closeTo(width, 0.01));
+        expect(image.width, closeTo(expectedWidth, 0.01));
         expect(image.y, greaterThanOrEqualTo(30));
         expect(image.y + image.height, lessThan(PdfPageFormat.a4.height - 20));
         rows.putIfAbsent(image.y.toStringAsFixed(2), () => []).add(image.x);
       }
       for (final row in rows.values) {
-        expect(row.length, lessThanOrEqualTo(5));
+        expect(row.length, lessThanOrEqualTo(4));
         for (var i = 0; i < row.length; i++) {
-          expect(row[i], closeTo(40 + i * (width + 11), 0.01));
+          expect(
+              row[i],
+              closeTo(
+                  40 + i * (expectedWidth + ReportPdfBuilder.photoGap), 0.01));
         }
       }
     }

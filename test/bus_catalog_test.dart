@@ -9,16 +9,19 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('catalog contains exactly HG 2 through HG 6 with fixed plates', () {
+  test('catalog contains exactly HG2 through HG6 and HC1 through HC3 with fixed plates', () {
     expect(busCatalog.map((bus) => (bus.name, bus.plate)), [
-      ('HG 2', 'AB 7317 BK'),
-      ('HG 3', 'AB 7402 BK'),
-      ('HG 4', 'AB 7403 BK'),
-      ('HG 5', 'AB 7454 BK'),
-      ('HG 6', 'AB 7497 BK'),
+      ('HG2', 'AB 7317 BK'),
+      ('HG3', 'AB 7402 BK'),
+      ('HG4', 'AB 7403 BK'),
+      ('HG5', 'AB 7454 BK'),
+      ('HG6', 'AB 7497 BK'),
+      ('HC1', 'AB 1669 SV'),
+      ('HC2', 'AB 1779 KP'),
+      ('HC3', 'AB 1097 DF'),
     ]);
     expect(() => busCatalog.clear(), throwsUnsupportedError);
-    expect(() => busCatalog.add(const Bus(name: 'HG 1', plate: 'custom')),
+    expect(() => busCatalog.add(const Bus(name: 'HG1', plate: 'custom')),
         throwsUnsupportedError);
     for (final bus in busCatalog) {
       expect(busNameForPlate(bus.plate), bus.name);
@@ -57,6 +60,6 @@ void main() {
       expect(report.toMap()['no_polisi'], entry.value);
       expect(report.toMap().containsKey('bus_name'), isFalse);
     }
-    expect(await store.getAllReports(), hasLength(5));
+    expect(await store.getAllReports(), hasLength(8));
   });
 }

@@ -427,12 +427,30 @@ class _FormScreenState extends State<FormScreen> {
 
   Widget _stepNavigation() =>
       Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Text('LANGKAH ${_step + 1} DARI $_stepCount',
-            style: const TextStyle(
-                fontSize: 11,
-                letterSpacing: 1.3,
-                color: AppColors.muted,
-                fontWeight: FontWeight.w700)),
+        SizedBox(
+          width: double.infinity,
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              Text('LANGKAH ${_step + 1} DARI $_stepCount',
+                  style: const TextStyle(
+                      fontSize: 11,
+                      letterSpacing: 1.3,
+                      color: AppColors.muted,
+                      fontWeight: FontWeight.w700)),
+              _GuestToggle(
+                value: _hasGuest,
+                onChanged: (value) => setState(() {
+                  _hasGuest = value;
+                  if (!value && _step > 2) _step = 2;
+                }),
+              ),
+            ],
+          ),
+        ),
         const SizedBox(height: 10),
         Wrap(spacing: 8, runSpacing: 8, children: [
           for (final entry in _stepLabels.asMap().entries)
@@ -453,27 +471,19 @@ class _FormScreenState extends State<FormScreen> {
       ]);
 
   List<Widget> _tripFields() => [
-        _GuestToggle(
-          value: _hasGuest,
-          onChanged: (value) => setState(() {
-            _hasGuest = value;
-            if (!value && _step > 2) _step = 2;
-          }),
-        ),
-        const SizedBox(height: 12),
         SectionCard(
             padding: const EdgeInsets.all(16),
             child: Column(children: [
               const SectionHeading(
-                  title: 'Bus & Tamu',
+                  title: 'Armada & Tamu',
                   compact: true,
                   icon: Icons.route_outlined),
               DropdownButtonFormField<String>(
                 value: _selectedPlate,
                 isExpanded: true,
-                hint: const Text('Pilih bus'),
+                hint: const Text('Pilih armada'),
                 decoration:
-                    InputDecoration(labelText: 'Bus', errorText: _busError),
+                    InputDecoration(labelText: 'Armada', errorText: _busError),
                 items: [
                   for (final bus in busCatalog)
                     DropdownMenuItem(
@@ -856,7 +866,7 @@ class _FormScreenState extends State<FormScreen> {
               const SectionHeading(
                   title: 'Pembayaran Tagihan',
                   compact: true,
-                  subtitle: 'Titipan pelunasan bus dari tamu.',
+                  subtitle: 'Titipan pelunasan armada dari tamu.',
                   icon: Icons.payments_outlined),
               _numberField(_pembayaranTagihan, 'Pembayaran tagihan'),
             ])),
@@ -1136,7 +1146,7 @@ class _FormScreenState extends State<FormScreen> {
                 borderRadius: BorderRadius.circular(12)),
             child: Column(children: [
               _text(_extraNames[i], 'Nama extra ${i + 1}',
-                  hint: 'Misalnya parkir, tol, atau cuci bus'),
+                  hint: 'Misalnya parkir, tol, atau cuci armada'),
               const SizedBox(height: 12),
               _expenseField(_extraAmounts[i], 'Harga extra ${i + 1}',
                   ExpenseOwner(ExpenseType.officeExtra, extraId: _extraIds[i]),
@@ -1244,7 +1254,7 @@ class _FormScreenState extends State<FormScreen> {
   bool _validateBus() {
     if (busCatalog.any((bus) => bus.plate == _selectedPlate)) return true;
     setState(() {
-      _busError = 'Pilih bus terlebih dahulu.';
+      _busError = 'Pilih armada terlebih dahulu.';
       _step = 0;
     });
     if (_scroll.hasClients) _scroll.jumpTo(0);
@@ -1554,32 +1564,46 @@ class _GuestToggle extends StatelessWidget {
       onTap: () => onChanged(!value),
       child: ConstrainedBox(
         constraints: const BoxConstraints(minHeight: 48),
-        child: Row(children: [
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 200),
-            curve: Curves.easeOut,
-            width: 46,
-            height: 26,
-            padding: const EdgeInsets.all(2),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(13),
-              color: trackFill,
-              border:
-                  Border.all(color: value ? AppColors.brand : AppColors.border),
-            ),
-            alignment: value ? Alignment.centerRight : Alignment.centerLeft,
-            child: Container(
-              width: 20,
-              height: 20,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              curve: Curves.easeOut,
+              width: 46,
+              height: 26,
+              padding: const EdgeInsets.all(2),
               decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: value ? AppColors.brand : Colors.white,
+                borderRadius: BorderRadius.circular(13),
+                color: trackFill,
+                border:
+                    Border.all(color: value ? AppColors.brand : AppColors.border),
+              ),
+              alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+              child: Container(
+                width: 20,
+                height: 20,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: value ? AppColors.brand : Colors.white,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-          const Expanded(child: Text('Tamu Discova')),
-        ]),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(
+                'Tamu Discova',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: value ? FontWeight.w600 : FontWeight.w500,
+                  color: value ? AppColors.ink : AppColors.muted,
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

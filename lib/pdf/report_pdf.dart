@@ -13,9 +13,11 @@ import '../utils/format.dart';
 /// The approved v3 layout, with row-level pagination rather than a page limit.
 class ReportPdfBuilder {
   static const _margin = 40.0;
-  static const _photoGap = 11.0;
-  static const _photoHeight = 78.0;
-  static const photosPerRow = 5;
+  static const photoGap = 8.0;
+  static const photoHeightPortrait = 160.0;
+  static const photoHeightLandscape = 120.0;
+  static const maxPhotoRowWidth = 515.0;
+  static const photosPerRow = 4;
   static const _moneyWidth = 75.0;
   static const _ink = PdfColor(0.12, 0.12, 0.12);
   static const _muted = PdfColor(0.38, 0.38, 0.38);
@@ -108,10 +110,10 @@ class ReportPdfBuilder {
 
       doc.addPage(section('Catatan dan Lampiran', [
         if (hasNotes) ...[
+          _rule(),
+          pw.SizedBox(height: 8),
           _bulletTitle('Catatan'),
           pw.SizedBox(height: 6),
-          _rule(),
-          pw.SizedBox(height: 10),
           if (report.catatan.trim().isNotEmpty) ...[
             _noteCard('Catatan Kantor', report.catatan),
             pw.SizedBox(height: 8),
@@ -121,38 +123,38 @@ class ReportPdfBuilder {
             _noteCard('Catatan Discova', report.guestCatatan),
             pw.SizedBox(height: 8),
           ],
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 12),
         ],
         if (officeGroups.isNotEmpty) ...[
-          pw.NewPage(freeSpace: 120),
+          pw.NewPage(freeSpace: 180),
+          _rule(),
+          pw.SizedBox(height: 8),
           _bulletTitle('LPJ Kantor'),
           pw.SizedBox(height: 6),
-          _rule(),
-          pw.SizedBox(height: 10),
           for (var i = 0; i < officeGroups.length; i++) ...[
             _photoGroup(officeGroups[i], i, report),
             pw.SizedBox(height: 10),
           ],
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 12),
         ],
         if (discovaGroups.isNotEmpty) ...[
-          pw.NewPage(freeSpace: 120),
+          pw.NewPage(freeSpace: 180),
+          _rule(),
+          pw.SizedBox(height: 8),
           _bulletTitle('LPJ Discova'),
           pw.SizedBox(height: 6),
-          _rule(),
-          pw.SizedBox(height: 10),
           for (var i = 0; i < discovaGroups.length; i++) ...[
             _photoGroup(discovaGroups[i], i, report),
             pw.SizedBox(height: 10),
           ],
-          pw.SizedBox(height: 8),
+          pw.SizedBox(height: 12),
         ],
         if (otherGroups.isNotEmpty) ...[
-          pw.NewPage(freeSpace: 120),
+          pw.NewPage(freeSpace: 180),
+          _rule(),
+          pw.SizedBox(height: 8),
           _bulletTitle('Lampiran Lainnya'),
           pw.SizedBox(height: 6),
-          _rule(),
-          pw.SizedBox(height: 10),
           for (var i = 0; i < otherGroups.length; i++) ...[
             _photoGroup(otherGroups[i], i, report),
             pw.SizedBox(height: 10),
@@ -188,7 +190,7 @@ class ReportPdfBuilder {
                   [
                     'LPJ',
                     if (bus.isNotEmpty) bus,
-                    DateFormat('MM.yyyy').format(report.tanggalBuat)
+                    DateFormat('dd.MM.yyyy').format(report.tanggalBuat)
                   ].join(' / '),
                   style: _small.copyWith(fontSize: 8.5),
                 ),
@@ -211,7 +213,7 @@ class ReportPdfBuilder {
     final bus = _busName(report.noPolisi);
     final busLabel = bus.isNotEmpty ? bus : report.noPolisi.trim();
     final dateStr =
-        DateFormat('dd / MM / yyyy').format(report.tanggalBuat);
+        DateFormat('dd.MM.yyyy').format(report.tanggalBuat);
     final code = [
       'LPJ',
       if (busLabel.isNotEmpty) busLabel,
@@ -249,12 +251,12 @@ class ReportPdfBuilder {
                 ),
               ),
               pw.SizedBox(
-                width: 120,
+                width: 130,
                 child: pw.Align(
                   alignment: pw.Alignment.topRight,
                   child: pw.Text(
                     pj.isEmpty ? '' : 'PJ : $pj',
-                    style: _body.copyWith(fontSize: 9.5),
+                    style: _bold.copyWith(fontSize: 12),
                     textAlign: pw.TextAlign.right,
                   ),
                 ),
@@ -338,7 +340,7 @@ class ReportPdfBuilder {
           _pair('Berangkat', spanStartLabel(report, periods)),
           _pair('Kembali', spanEndLabel(report, periods)),
         ]),
-        _identityGroup('BUS', 95, [
+        _identityGroup('ARMADA', 95, [
           pw.Text(busDisplay, style: _body),
         ]),
         _identityGroup('CREW', 115, [
@@ -424,12 +426,12 @@ class ReportPdfBuilder {
               width: _moneyWidth,
               child: pw.Text(
                 amount == null ? '' : _money(amount),
-                style: _body,
+                style: _bold.copyWith(fontSize: 10.5),
                 textAlign: pw.TextAlign.right,
               ),
             ),
           ] else if (amount != null) ...[
-            pw.Text(_money(amount), style: _body),
+            pw.Text(_money(amount), style: _bold.copyWith(fontSize: 10.5)),
           ],
         ],
       );
@@ -445,10 +447,10 @@ class ReportPdfBuilder {
         pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: [
+            _rule(),
+            pw.SizedBox(height: 8),
             _bulletTitle('Periode'),
             pw.SizedBox(height: 6),
-            _rule(),
-            pw.SizedBox(height: 3),
           ],
         ),
       ]),
@@ -493,7 +495,13 @@ class ReportPdfBuilder {
       pw.TableRow(children: [
         pw.Column(children: [
           pw.SizedBox(height: 4),
-          _rule(),
+          pw.Row(children: [
+            pw.Expanded(child: pw.SizedBox()),
+            pw.SizedBox(
+              width: 135,
+              child: _rule(width: 0.75),
+            ),
+          ]),
           pw.Padding(
             padding: const pw.EdgeInsets.symmetric(vertical: 6),
             child: pw.Row(children: [
@@ -592,10 +600,10 @@ class ReportPdfBuilder {
           pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
+              _rule(),
+              pw.SizedBox(height: 8),
               _bulletTitle(title, amount: received, twoColumn: true),
               pw.SizedBox(height: 6),
-              _rule(),
-              pw.SizedBox(height: 3),
             ],
           ),
         ]),
@@ -609,14 +617,13 @@ class ReportPdfBuilder {
         pw.TableRow(children: [
           pw.Column(children: [
             pw.SizedBox(height: 4),
-            _rule(),
+            _partialRuleRow(left: true),
             pw.Padding(
-              padding: const pw.EdgeInsets.symmetric(vertical: 6),
+              padding: const pw.EdgeInsets.only(top: 4, bottom: 2),
               child: _moneyRow('Total Pengeluaran', left: total, indent: true),
             ),
-            _rule(),
             pw.Padding(
-              padding: const pw.EdgeInsets.only(top: 6),
+              padding: const pw.EdgeInsets.only(top: 2),
               child: _moneyRow(
                 balance < 0 ? 'Defisit' : 'Sisa',
                 right: balance < 0 ? balance.abs() : balance,
@@ -628,6 +635,24 @@ class ReportPdfBuilder {
         ]),
       ]);
 
+  static pw.Widget _partialRuleRow({
+    bool left = false,
+    bool right = false,
+    double width = 0.75,
+  }) =>
+      pw.Row(
+        children: [
+          pw.Expanded(child: pw.SizedBox()),
+          pw.SizedBox(
+            width: _moneyWidth,
+            child: left ? _rule(width: width) : pw.SizedBox(),
+          ),
+          pw.SizedBox(
+            width: _moneyWidth,
+            child: right ? _rule(width: width) : pw.SizedBox(),
+          ),
+        ],
+      );
 
   static String _money(int value) =>
       formatRupiah(value).replaceAll('Rp ', 'Rp');
@@ -647,7 +672,7 @@ class ReportPdfBuilder {
         ]),
       ]);
 
-  static pw.Widget _rule({double width = 0.45, PdfColor color = _hairline}) =>
+  static pw.Widget _rule({double width = 0.75, PdfColor color = _hairline}) =>
       pw.Container(width: double.infinity, height: width, color: color);
 
 
@@ -809,6 +834,44 @@ class ReportPdfBuilder {
     );
   }
 
+  static double imageAspectRatio(ReportAttachmentImage image) {
+    if (image.bytes.isEmpty) return 0.75;
+    try {
+      final mem = pw.MemoryImage(image.bytes);
+      final w = mem.width ?? 0;
+      final h = mem.height ?? 0;
+      if (w > 0 && h > 0) {
+        return w / h;
+      }
+    } catch (_) {}
+    return 0.75;
+  }
+
+  static (double width, double height) photoDimensions(
+      ReportAttachmentImage image) {
+    final ratio = imageAspectRatio(image);
+    final isLandscape = ratio >= 1.0;
+    var height = isLandscape ? photoHeightLandscape : photoHeightPortrait;
+    var width = height * ratio;
+    if (width > maxPhotoRowWidth) {
+      width = maxPhotoRowWidth;
+      height = width / ratio;
+    }
+    return (width, height);
+  }
+
+  static pw.Widget _buildPhotoWidget(ReportAttachmentImage image) {
+    final (width, height) = photoDimensions(image);
+    return pw.SizedBox(
+      width: width,
+      height: height,
+      child: pw.Image(
+        pw.MemoryImage(image.bytes),
+        fit: pw.BoxFit.contain,
+      ),
+    );
+  }
+
   static pw.Widget _photoGroup(
       ReportPhotoGroup group, int index, Report report) {
     final letter = String.fromCharCode(97 + (index % 26));
@@ -828,22 +891,9 @@ class ReportPdfBuilder {
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
-                for (var column = 0; column < photosPerRow; column++) ...[
-                  if (column > 0) pw.SizedBox(width: _photoGap),
-                  pw.Expanded(
-                    child: pw.SizedBox(
-                      height: _photoHeight,
-                      child: pw.Align(
-                        alignment: pw.Alignment.topCenter,
-                        child: column >= row.length
-                            ? pw.SizedBox()
-                            : pw.Image(
-                                pw.MemoryImage(row[column].bytes),
-                                fit: pw.BoxFit.contain,
-                              ),
-                      ),
-                    ),
-                  ),
+                for (var column = 0; column < row.length; column++) ...[
+                  if (column > 0) pw.SizedBox(width: photoGap),
+                  _buildPhotoWidget(row[column]),
                 ],
               ],
             ),
@@ -874,11 +924,34 @@ class ReportPhotoGroup {
       : images = List.unmodifiable(images);
 
   Iterable<List<ReportAttachmentImage>> get rows sync* {
-    for (var start = 0;
-        start < images.length;
-        start += ReportPdfBuilder.photosPerRow) {
-      final end = start + ReportPdfBuilder.photosPerRow;
-      yield images.sublist(start, end > images.length ? images.length : end);
+    if (images.isEmpty) return;
+
+    var currentRow = <ReportAttachmentImage>[];
+    var currentWidth = 0.0;
+
+    for (final image in images) {
+      final (width, _) = ReportPdfBuilder.photoDimensions(image);
+      final neededWidth = currentRow.isEmpty
+          ? width
+          : currentWidth + ReportPdfBuilder.photoGap + width;
+
+      final ratio = ReportPdfBuilder.imageAspectRatio(image);
+      final isLandscape = ratio >= 1.0;
+      final maxInRow = isLandscape ? 3 : 4;
+
+      if (currentRow.isNotEmpty &&
+          (neededWidth > ReportPdfBuilder.maxPhotoRowWidth ||
+              currentRow.length >= maxInRow)) {
+        yield currentRow;
+        currentRow = [image];
+        currentWidth = width;
+      } else {
+        currentRow.add(image);
+        currentWidth = neededWidth;
+      }
+    }
+    if (currentRow.isNotEmpty) {
+      yield currentRow;
     }
   }
 }

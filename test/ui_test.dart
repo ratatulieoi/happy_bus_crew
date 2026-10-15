@@ -359,7 +359,7 @@ void main() {
   }
 
   Future<void> selectBus(WidgetTester tester,
-      {String label = 'HG 2 • AB 7317 BK'}) async {
+      {String label = 'HG2 • AB 7317 BK'}) async {
     final dropdown = find.byType(DropdownButtonFormField<String>);
     await reveal(tester, dropdown);
     await tester.tap(dropdown);
@@ -397,7 +397,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(FormScreen), findsOneWidget);
     expectNoBusManagement();
-    expect(find.text('Pilih bus'), findsOneWidget);
+    expect(find.text('Pilih armada'), findsOneWidget);
     expect(
         tester
             .widget<DropdownButtonFormField<String>>(
@@ -421,13 +421,19 @@ void main() {
       'AB 7403 BK',
       'AB 7454 BK',
       'AB 7497 BK',
+      'AB 1669 SV',
+      'AB 1779 KP',
+      'AB 1097 DF',
     ]);
     expect(dropdown.items!.map((item) => (item.child as Text).data), [
-      'HG 2 • AB 7317 BK',
-      'HG 3 • AB 7402 BK',
-      'HG 4 • AB 7403 BK',
-      'HG 5 • AB 7454 BK',
-      'HG 6 • AB 7497 BK',
+      'HG2 • AB 7317 BK',
+      'HG3 • AB 7402 BK',
+      'HG4 • AB 7403 BK',
+      'HG5 • AB 7454 BK',
+      'HG6 • AB 7497 BK',
+      'HC1 • AB 1669 SV',
+      'HC2 • AB 1779 KP',
+      'HC3 • AB 1097 DF',
     ]);
     final decoration = tester
         .widget<InputDecorator>(
@@ -438,7 +444,7 @@ void main() {
     expect(decoration.contentPadding, const EdgeInsets.all(12));
     expect(decoration.constraints?.minHeight, 48);
     expectNoBusManagement();
-    await selectBus(tester, label: 'HG 6 • AB 7497 BK');
+    await selectBus(tester, label: 'HG6 • AB 7497 BK');
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     expect(find.text('LPJ Kantor'), findsOneWidget);
@@ -457,7 +463,7 @@ void main() {
     await pumpScreen(tester, const FormScreen());
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    expect(find.text('Pilih bus terlebih dahulu.'), findsOneWidget);
+    expect(find.text('Pilih armada terlebih dahulu.'), findsOneWidget);
     expect(find.text('Periode'), findsNWidgets(2));
     await tester.tap(find.text('Tamu Discova'));
     await tester.pumpAndSettle();
@@ -469,15 +475,15 @@ void main() {
       await tester.tap(find.text(label));
       await tester.pumpAndSettle();
       expect(find.text('LANGKAH 1 DARI 4'), findsOneWidget);
-      expect(find.text('Pilih bus terlebih dahulu.'), findsOneWidget);
+      expect(find.text('Pilih armada terlebih dahulu.'), findsOneWidget);
       expect(find.text('Simpan laporan'), findsNothing);
     }
     await tester.tap(find.byTooltip('Pratinjau PDF tanpa menyimpan'));
     await tester.pumpAndSettle();
     expect(find.byType(PreviewScreen), findsNothing);
     expect(savedReport, isNull);
-    await selectBus(tester, label: 'HG 4 • AB 7403 BK');
-    expect(find.text('Pilih bus terlebih dahulu.'), findsNothing);
+    await selectBus(tester, label: 'HG4 • AB 7403 BK');
+    expect(find.text('Pilih armada terlebih dahulu.'), findsNothing);
     await reveal(tester, find.text('4. Penanggungjawab'));
     await tester.tap(find.text('4. Penanggungjawab'));
     await tester.pumpAndSettle();
@@ -510,13 +516,13 @@ void main() {
     await tester.pumpAndSettle();
     expect(savedReport, isNull);
     expect(find.text('Periode'), findsNWidgets(2));
-    expect(find.text('Pilih bus terlebih dahulu.'), findsOneWidget);
+    expect(find.text('Pilih armada terlebih dahulu.'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('selected bus reaches preview without saving', (tester) async {
     await pumpScreen(tester, const FormScreen());
-    await selectBus(tester, label: 'HG 3 • AB 7402 BK');
+    await selectBus(tester, label: 'HG3 • AB 7402 BK');
     await tester.tap(find.byTooltip('Pratinjau PDF tanpa menyimpan'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
@@ -529,7 +535,7 @@ void main() {
   testWidgets('dashboard loads, searches, filters and opens edit',
       (tester) async {
     await pumpScreen(tester, const HomeScreen());
-    expect(find.text('HG 2'), findsWidgets);
+    expect(find.text('HG2'), findsWidgets);
     expectNoBusManagement();
     expect(find.text('Kilometer terakhir'), findsNothing);
     expect(find.text('Jarak tempuh'), findsNothing);
@@ -541,14 +547,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
     await tester.pumpAndSettle();
-    expect(find.text('HG 3 • Dedi'), findsOneWidget);
-    expect(find.text('HG 2 • Budi Santoso'), findsNothing);
+    expect(find.text('HG3 • Dedi'), findsOneWidget);
+    expect(find.text('HG2 • Budi Santoso'), findsNothing);
     await tester.tap(find.byTooltip('Hapus pencarian'));
     await tester.pumpAndSettle();
-    await tester.tap(find.widgetWithText(ChoiceChip, 'HG 2'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'HG2'));
     await tester.pumpAndSettle();
-    expect(find.text('HG 3 • Dedi'), findsNothing);
-    expect(find.text('HG 2 • Budi Santoso'), findsOneWidget);
+    expect(find.text('HG3 • Dedi'), findsNothing);
+    expect(find.text('HG2 • Budi Santoso'), findsOneWidget);
     await tester.tap(find.byTooltip('Tindakan laporan').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ubah laporan'));
@@ -708,13 +714,17 @@ void main() {
         ))
         .toList();
     final toggleIndex = controls.indexOf(toggleWidget);
-    expect(toggleIndex, greaterThan(0));
-    expect(controls.take(toggleIndex), everyElement(isA<ChoiceChip>()));
-    expect(controls[toggleIndex + 1], isA<DropdownButtonFormField<String>>());
+    expect(toggleIndex, 0);
+    expect(controls.skip(1).take(3), everyElement(isA<ChoiceChip>()));
+    expect(controls.any((c) => c is DropdownButtonFormField<String>), isTrue);
     expect(
-        controls[toggleIndex + 2],
-        same(tester.widget<TextFormField>(
-            find.widgetWithText(TextFormField, 'Nama tamu'))));
+        controls.any((c) =>
+            c is TextFormField &&
+            identical(
+                c,
+                tester.widget<TextFormField>(
+                    find.widgetWithText(TextFormField, 'Nama tamu')))),
+        isTrue);
     expect(find.ancestor(of: toggle, matching: find.byType(SectionCard)),
         findsNothing);
 
@@ -2044,8 +2054,8 @@ void main() {
     await pumpScreen(tester, const HomeScreen());
     await tester.tap(find.text('Buat laporan baru'));
     await tester.pumpAndSettle();
-    expect(find.text('Pilih bus'), findsOneWidget);
-    await selectBus(tester, label: 'HG 5 • AB 7454 BK');
+    expect(find.text('Pilih armada'), findsOneWidget);
+    await selectBus(tester, label: 'HG5 • AB 7454 BK');
     expectNoBusManagement();
     expect(find.text('Jam berangkat'), findsNothing);
     expect(find.text('KM awal'), findsNothing);
@@ -2072,7 +2082,7 @@ void main() {
     expect(savedReport?['dalam_kota_count'], isNull);
     await tester.tap(find.text('Buat laporan baru'));
     await tester.pumpAndSettle();
-    expect(find.text('Pilih bus'), findsOneWidget);
+    expect(find.text('Pilih armada'), findsOneWidget);
     expect(
         tester
             .widget<DropdownButtonFormField<String>>(
@@ -2122,22 +2132,22 @@ void main() {
       (tester) async {
     await pumpScreen(tester, const HomeScreen());
     final search = find.byType(TextField);
-    await tester.enterText(search, 'HG 3');
+    await tester.enterText(search, 'HG3');
     await tester.pumpAndSettle();
-    await reveal(tester, find.text('HG 3 • Dedi'));
-    expect(find.text('HG 3 • Dedi'), findsOneWidget);
-    expect(find.text('HG 2 • Budi Santoso'), findsNothing);
+    await reveal(tester, find.text('HG3 • Dedi'));
+    expect(find.text('HG3 • Dedi'), findsOneWidget);
+    expect(find.text('HG2 • Budi Santoso'), findsNothing);
     await tester.enterText(search, 'AB 7317 BK');
     await tester.pumpAndSettle();
-    expect(find.text('HG 2 • Budi Santoso'), findsOneWidget);
-    expect(find.text('HG 3 • Dedi'), findsNothing);
+    expect(find.text('HG2 • Budi Santoso'), findsOneWidget);
+    expect(find.text('HG3 • Dedi'), findsNothing);
     await tester.tap(find.byTooltip('Hapus pencarian'));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(FilterChip, 'Defisit'), findsNothing);
-    await tester.tap(find.widgetWithText(ChoiceChip, 'HG 3'));
+    await tester.tap(find.widgetWithText(ChoiceChip, 'HG3'));
     await tester.pumpAndSettle();
-    expect(find.text('HG 3 • Dedi'), findsOneWidget);
-    expect(find.text('HG 2 • Budi Santoso'), findsNothing);
+    expect(find.text('HG3 • Dedi'), findsOneWidget);
+    expect(find.text('HG2 • Budi Santoso'), findsNothing);
     expectNoBusManagement();
     expect(tester.takeException(), isNull);
   });

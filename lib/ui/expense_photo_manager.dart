@@ -40,9 +40,18 @@ class _ExpensePhotoManagerState extends State<ExpensePhotoManager> {
     try {
       final List<XFile> picked;
       if (source == ImageSource.gallery) {
-        picked = await _picker.pickMultiImage(imageQuality: 85);
+        picked = await _picker.pickMultiImage(
+          maxWidth: 1440,
+          maxHeight: 1440,
+          imageQuality: 80,
+        );
       } else {
-        final image = await _picker.pickImage(source: source, imageQuality: 85);
+        final image = await _picker.pickImage(
+          source: source,
+          maxWidth: 1440,
+          maxHeight: 1440,
+          imageQuality: 80,
+        );
         picked = image == null ? [] : [image];
       }
       if (!mounted || picked.isEmpty) return;

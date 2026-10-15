@@ -151,7 +151,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   onChanged: (_) => setState(() {}),
                                   decoration: InputDecoration(
                                     hintText:
-                                        'Cari bus, plat, crew, atau tanggal',
+                                        'Cari armada, plat, crew, atau tanggal',
                                     prefixIcon:
                                         const Icon(Icons.search_rounded),
                                     suffixIcon: _search.text.isEmpty
@@ -168,7 +168,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 const SizedBox(height: 12),
                                 Wrap(spacing: 8, runSpacing: 4, children: [
                                   ChoiceChip(
-                                      label: const Text('Semua bus'),
+                                      label: const Text('Semua armada'),
                                       selected: _filterPlate == null,
                                       onSelected: (_) =>
                                           setState(() => _filterPlate = null)),
@@ -201,7 +201,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                     : 'Tidak ada laporan yang cocok',
                                 message: _reports.isEmpty
                                     ? 'Buat laporan untuk mencatat perjalanan dan lampiran gambar.'
-                                    : 'Coba kata kunci lain atau tampilkan semua bus.',
+                                    : 'Coba kata kunci lain atau tampilkan semua armada.',
                                 action: _reports.isEmpty
                                     ? null
                                     : TextButton(
