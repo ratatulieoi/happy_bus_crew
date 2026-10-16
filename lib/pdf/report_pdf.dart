@@ -17,9 +17,7 @@ class ReportPdfBuilder {
   static const maxPhotoRowWidth = 515.0;
   static const photosPerRow = 3;
   static const photoLeftIndent = 22.0;
-  static const photoSize =
-      (maxPhotoRowWidth - photoLeftIndent - (photosPerRow - 1) * photoGap) /
-          photosPerRow;
+  static const photoSize = 138.0;
   static const photoHeightPortrait = photoSize;
   static const photoHeightLandscape = photoSize;
   static const _moneyWidth = 75.0;
@@ -52,7 +50,7 @@ class ReportPdfBuilder {
 
     pw.MultiPage section(String title, List<pw.Widget> content) => pw.MultiPage(
           pageFormat: PdfPageFormat.a4,
-          margin: const pw.EdgeInsets.fromLTRB(_margin, 30, _margin, 20),
+          margin: const pw.EdgeInsets.fromLTRB(_margin, 26, _margin, 20),
           // This is a loop-safety bound, not a fixed report page count.
           maxPages: 10000,
           header: (_) => _header(title, logo, report),
@@ -128,6 +126,14 @@ class ReportPdfBuilder {
           .where((g) => !_isOfficeOwner(g.owner) && !_isDiscovaOwner(g.owner))
           .toList();
 
+      var photoNumber = 1;
+      pw.Widget buildGroup(ReportPhotoGroup group, int index) {
+        final widget =
+            _photoGroup(group, index, report, startNumber: photoNumber);
+        photoNumber += group.images.length;
+        return widget;
+      }
+
       doc.addPage(section('Lampiran', [
         if (officeGroups.isNotEmpty) ...[
           _rule(),
@@ -135,36 +141,36 @@ class ReportPdfBuilder {
           _bulletTitle('LPJ Kantor'),
           pw.SizedBox(height: 6),
           for (var i = 0; i < officeGroups.length; i++) ...[
-            if (i > 0) pw.NewPage(freeSpace: 195),
-            _photoGroup(officeGroups[i], i, report),
-            pw.SizedBox(height: 10),
+            if (i > 0) pw.NewPage(freeSpace: 165),
+            buildGroup(officeGroups[i], i),
+            pw.SizedBox(height: 8),
           ],
-          pw.SizedBox(height: 12),
+          pw.SizedBox(height: 10),
         ],
         if (discovaGroups.isNotEmpty) ...[
-          if (officeGroups.isNotEmpty) pw.NewPage(freeSpace: 230),
+          if (officeGroups.isNotEmpty) pw.NewPage(freeSpace: 190),
           _rule(),
           pw.SizedBox(height: 8),
           _bulletTitle('LPJ Discova'),
           pw.SizedBox(height: 6),
           for (var i = 0; i < discovaGroups.length; i++) ...[
-            if (i > 0) pw.NewPage(freeSpace: 195),
-            _photoGroup(discovaGroups[i], i, report),
-            pw.SizedBox(height: 10),
+            if (i > 0) pw.NewPage(freeSpace: 165),
+            buildGroup(discovaGroups[i], i),
+            pw.SizedBox(height: 8),
           ],
-          pw.SizedBox(height: 12),
+          pw.SizedBox(height: 10),
         ],
         if (otherGroups.isNotEmpty) ...[
           if (officeGroups.isNotEmpty || discovaGroups.isNotEmpty)
-            pw.NewPage(freeSpace: 230),
+            pw.NewPage(freeSpace: 190),
           _rule(),
           pw.SizedBox(height: 8),
           _bulletTitle('Lampiran Lainnya'),
           pw.SizedBox(height: 6),
           for (var i = 0; i < otherGroups.length; i++) ...[
-            if (i > 0) pw.NewPage(freeSpace: 195),
-            _photoGroup(otherGroups[i], i, report),
-            pw.SizedBox(height: 10),
+            if (i > 0) pw.NewPage(freeSpace: 165),
+            buildGroup(otherGroups[i], i),
+            pw.SizedBox(height: 8),
           ],
         ],
       ]));
@@ -813,9 +819,10 @@ class ReportPdfBuilder {
     return (photoSize, photoSize);
   }
 
-  static pw.Widget _buildPhotoWidget(ReportAttachmentImage image) {
+  static pw.Widget _buildPhotoWidget(ReportAttachmentImage image,
+      [int? number]) {
     final (width, height) = photoDimensions(image);
-    return pw.SizedBox(
+    final photo = pw.SizedBox(
       width: width,
       height: height,
       child: pw.Image(
@@ -823,30 +830,57 @@ class ReportPdfBuilder {
         fit: pw.BoxFit.contain,
       ),
     );
+    if (number == null) return photo;
+    return pw.Stack(
+      children: [
+        photo,
+        pw.Positioned(
+          left: 4,
+          top: 4,
+          child: pw.Container(
+            padding:
+                const pw.EdgeInsets.symmetric(horizontal: 4.5, vertical: 1.5),
+            decoration: const pw.BoxDecoration(
+              color: _ink,
+              borderRadius: pw.BorderRadius.all(pw.Radius.circular(2)),
+            ),
+            child: pw.Text(
+              '$number',
+              style: _bold.copyWith(fontSize: 8, color: PdfColors.white),
+            ),
+          ),
+        ),
+      ],
+    );
   }
 
   static pw.Widget _photoGroup(
-      ReportPhotoGroup group, int index, Report report) {
+    ReportPhotoGroup group,
+    int index,
+    Report report, {
+    int startNumber = 1,
+  }) {
     final letter = String.fromCharCode(65 + (index % 26));
     final name = _expenseItemLabel(report, group.owner);
     final label = '$letter. $name';
+    var currentNumber = startNumber;
     return _rowTable([
       pw.TableRow(repeat: true, children: [
         pw.Padding(
-          padding: const pw.EdgeInsets.only(left: photoLeftIndent, bottom: 8),
+          padding: const pw.EdgeInsets.only(left: photoLeftIndent, bottom: 6),
           child: pw.Text(label, style: _bold.copyWith(fontSize: 10.5)),
         ),
       ]),
       for (final row in group.rows)
         pw.TableRow(children: [
           pw.Padding(
-            padding: const pw.EdgeInsets.only(left: photoLeftIndent, bottom: 8),
+            padding: const pw.EdgeInsets.only(left: photoLeftIndent, bottom: 6),
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
                 for (var column = 0; column < row.length; column++) ...[
                   if (column > 0) pw.SizedBox(width: photoGap),
-                  _buildPhotoWidget(row[column]),
+                  _buildPhotoWidget(row[column], currentNumber++),
                 ],
               ],
             ),

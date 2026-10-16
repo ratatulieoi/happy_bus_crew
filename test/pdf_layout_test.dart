@@ -499,18 +499,92 @@ void main() {
 
     final doc = await ReportPdfBuilder.build(r, attachmentImages: attachments);
     final geom = await pdfGeometry(doc);
-    expect(geom.length, 4);
+    expect(geom.length, 3);
 
     final pages = (await pdfPageText(doc)).map(normalizePdfText).toList();
     expect(pages[1], contains('A. BBM'));
     expect(pages[1], contains('B. batreai'));
-    expect(pages[1], isNot(contains('baju renang')));
+    expect(pages[1], contains('C. baju renang'));
 
-    expect(pages[2], contains('C. baju renang'));
+    expect(pages[2], contains('LPJ Discova'));
     expect(pages[2], contains('A. Tol'));
     expect(pages[2], contains('B. Penyeberangan'));
-    expect(pages[2], isNot(contains('Parkir')));
+    expect(pages[2], contains('C. Parkir'));
 
-    expect(pages[3], contains('C. Parkir'));
+    final allText =
+        geom.skip(1).expand((g) => g.text).map((t) => t.value).toList();
+    for (var n = 1; n <= 14; n++) {
+      expect(allText, contains('$n'));
+    }
+  });
+
+  test('12 photos in 1 group fit on 1 lampiran page (2 pages total)', () async {
+    final squareBytes = Uint8List.fromList(
+        img.encodeJpg(img.Image(width: 100, height: 100)));
+    final r = Report.fromMap({
+      'id': 1,
+      'tanggal_buat': '2026-10-16T00:00:00',
+      'no_polisi': 'AB 7454 BK',
+      'nama_crew': 'satria',
+      'nama_tamu': 'tamu',
+      'has_guest_allowance': 0,
+    });
+
+    final attachments = <ReportAttachmentImage>[
+      for (var i = 0; i < 12; i++)
+        ReportAttachmentImage(
+            bytes: squareBytes,
+            owner: const ExpenseOwner(ExpenseType.officeBbm)),
+    ];
+
+    final doc = await ReportPdfBuilder.build(r, attachmentImages: attachments);
+    final geom = await pdfGeometry(doc);
+    expect(geom.length, 2,
+        reason: 'Expected 2 pages for 12 photos in 1 group');
+
+    final p2Text = geom[1].text.map((t) => t.value).toList();
+    for (var n = 1; n <= 12; n++) {
+      expect(p2Text, contains('$n'));
+    }
+  });
+
+  test('12 photos across 2 groups fit on 1 lampiran page (2 pages total)',
+      () async {
+    final squareBytes = Uint8List.fromList(
+        img.encodeJpg(img.Image(width: 100, height: 100)));
+    final r = Report.fromMap({
+      'id': 1,
+      'tanggal_buat': '2026-10-16T00:00:00',
+      'no_polisi': 'AB 7454 BK',
+      'nama_crew': 'satria',
+      'nama_tamu': 'tamu',
+      'has_guest_allowance': 0,
+    }).copyWith(
+      extras: [
+        ExtraExpense(id: 'extra1', name: 'ubnsn', amount: 10000),
+      ],
+    );
+
+    final attachments = <ReportAttachmentImage>[
+      for (var i = 0; i < 6; i++)
+        ReportAttachmentImage(
+            bytes: squareBytes,
+            owner: const ExpenseOwner(ExpenseType.officeBbm)),
+      for (var i = 0; i < 6; i++)
+        ReportAttachmentImage(
+            bytes: squareBytes,
+            owner:
+                const ExpenseOwner(ExpenseType.officeExtra, extraId: 'extra1')),
+    ];
+
+    final doc = await ReportPdfBuilder.build(r, attachmentImages: attachments);
+    final geom = await pdfGeometry(doc);
+    expect(geom.length, 2,
+        reason: 'Expected 2 pages for 12 photos across 2 groups');
+
+    final p2Text = geom[1].text.map((t) => t.value).toList();
+    for (var n = 1; n <= 12; n++) {
+      expect(p2Text, contains('$n'));
+    }
   });
 }
