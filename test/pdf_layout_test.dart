@@ -80,7 +80,7 @@ void main() {
   test('v3 uses real identities, routes, totals and two A4 sections', () async {
     final doc = await ReportPdfBuilder.build(report());
     final pages = (await pdfPageText(doc)).map(normalizePdfText).toList();
-    expect(pages, hasLength(2));
+    expect(pages, hasLength(1));
     for (final page in doc.document.pdfPageList.pages) {
       expect(page.pageFormat.width, PdfPageFormat.a4.width);
       expect(page.pageFormat.height, PdfPageFormat.a4.height);
@@ -101,16 +101,16 @@ void main() {
     expect(finance, contains('Sabtu, 10/10/2026 — Minggu, 11/10/2026 2 Hari LK'));
     expect(finance, contains('Total Periode 9 Hari LK 5 / DK 4'));
     expect(finance, contains('LPJ Kantor Rp3.000.000 BBM Rp1.800.000'));
-    expect(finance, contains('Uang Makan · 9 hari × Rp50.000 Rp450.000'));
+    expect(finance, contains('Uang Makan · 9 hari × Rp40.000 Rp360.000'));
     expect(finance, contains('Cuci bus Rp75.000 Air mineral Rp60.000'));
-    expect(finance, contains('Total Pengeluaran Rp2.425.000 Sisa Rp575.000'));
+    expect(finance, contains('Total Pengeluaran Rp2.335.000 Sisa Rp665.000'));
     expect(finance, contains('LPJ Discova Rp2.000.000 Tol Rp750.000'));
     expect(finance, contains('Total Pengeluaran Rp1.800.000 Sisa Rp200.000'));
     expect(finance, contains('Pelunasan Rp12.000.000'));
-    expect(pages.last, contains('Catatan dan Lampiran'));
-    expect(pages.last,
+    expect(finance, contains('Catatan Catatan Kantor'));
+    expect(finance,
         contains('Catatan Kantor Jeda tanggal 5 dan 6 tidak dihitung.'));
-    expect(pages.last,
+    expect(finance,
         contains('Catatan Discova Izin masuk kawasan sudah dibayar.'));
     expect(pages.first, contains('Rani Wulandari'));
     for (final removed in [
@@ -146,20 +146,20 @@ void main() {
     expect(title, isNotEmpty);
     final pj = finance.text.where((word) => word.value == 'PJ').toList();
     expect(pj, isNotEmpty);
-    for (final amount in ['Rp1.800.000', 'Rp450.000', 'Rp2.425.000']) {
+    for (final amount in ['Rp1.800.000', 'Rp360.000', 'Rp2.335.000']) {
       final word = finance.text.firstWhere((word) => word.value == amount);
       expect(
           word.x + word.width, closeTo(PdfPageFormat.a4.width - 40 - 75, 0.5));
     }
-    for (final amount in ['Rp3.000.000', 'Rp575.000']) {
+    for (final amount in ['Rp3.000.000', 'Rp665.000']) {
       final word = finance.text.firstWhere((word) => word.value == amount);
       expect(word.x + word.width, closeTo(PdfPageFormat.a4.width - 40, 0.5));
     }
     final expense = finance.text.firstWhere((word) => word.value == 'Rp40.000');
     final total =
-        finance.text.firstWhere((word) => word.value == 'Rp2.425.000');
+        finance.text.firstWhere((word) => word.value == 'Rp2.335.000');
     final balance =
-        finance.text.firstWhere((word) => word.value == 'Rp575.000');
+        finance.text.firstWhere((word) => word.value == 'Rp665.000');
     expect(finance.rules.any((rule) => rule.y > total.y && rule.y < expense.y),
         isTrue);
     expect(finance.rules.any((rule) => rule.y > balance.y && rule.y < total.y),
@@ -265,7 +265,7 @@ void main() {
     expect(pages.last, isNot(contains('Catatan Discova')));
     expect(pages.last, isNot(contains(r.guestCatatan)));
     expect(pages.last, contains('LPJ Discova'));
-    expect(pages.last, contains('a. Tol'));
+    expect(pages.last, contains('A. Tol'));
     expect(pages.last, contains('Lampiran belum dikelompokkan'));
   });
 
@@ -314,7 +314,7 @@ void main() {
     ];
     final r = report().copyWith(catatan: '', guestCatatan: '');
     final group = ReportPdfBuilder.groupAttachments(r, attachments).single;
-    expect(group.rows.map((row) => row.length), List.filled(83, 1));
+    expect(group.rows.map((row) => row.length), [...List.filled(27, 3), 2]);
     expect(group.rows.expand((row) => row), orderedEquals(attachments));
     expect(
         group.images.every((photo) => identical(photo.bytes, bytes)), isTrue);
@@ -330,7 +330,7 @@ void main() {
       final count = RegExp(r'/I\w+\s+Do').allMatches(streams).length;
       images += count;
       if (count > 0) expect(pages[i], contains('BBM'));
-      expect(pages[i], contains('Catatan dan Lampiran'));
+      expect(pages[i], contains('Lampiran'));
     }
     expect(images, 83);
     final geometry = await pdfGeometry(doc);
@@ -348,12 +348,15 @@ void main() {
         rows.putIfAbsent(image.y.toStringAsFixed(2), () => []).add(image.x);
       }
       for (final row in rows.values) {
-        expect(row.length, lessThanOrEqualTo(4));
+        expect(row.length, lessThanOrEqualTo(3));
         for (var i = 0; i < row.length; i++) {
           expect(
               row[i],
               closeTo(
-                  40 + i * (expectedWidth + ReportPdfBuilder.photoGap), 0.01));
+                  40 +
+                      ReportPdfBuilder.photoLeftIndent +
+                      i * (expectedWidth + ReportPdfBuilder.photoGap),
+                  0.01));
         }
       }
     }

@@ -241,9 +241,9 @@ void main() {
     final draftPdf = await ReportPdfBuilder.build(draft.report,
         attachmentImages: draft.attachmentImages);
     final text = normalizePdfText((await pdfPageText(draftPdf)).join(' '));
-    expect(text, contains('c. Parkir'));
-    expect(text, contains('d. Tol'));
-    expect(text, contains('a. BBM'));
+    expect(text, contains('C. Parkir'));
+    expect(text, contains('D. Tol'));
+    expect(text, contains('A. BBM'));
     expect(links, isEmpty);
     expect(tester.takeException(), isNull);
   });
@@ -328,9 +328,6 @@ void main() {
     await tap(tester, find.text('3. Penanggungjawab'));
     expect(find.text('Penanggungjawab'), findsNWidgets(2));
     expect(find.widgetWithText(TextFormField, 'Nama crew'), findsOneWidget);
-    expect(
-        find.widgetWithText(TextFormField, 'Catatan tambahan'), findsOneWidget);
-    expect(find.text('Defisit Kantor'), findsOneWidget);
     expect(find.text('Periksa pratinjau PDF'), findsOneWidget);
     expect(find.text('Galeri'), findsNothing);
     expect(find.text('Kamera'), findsNothing);
@@ -382,11 +379,11 @@ void main() {
           attachmentImages: preview.attachmentImages);
       final text = normalizePdfText((await pdfPageText(pdf)).join(' '));
       expect(text, contains('LPJ Kantor'));
-      expect(text, contains('a. Parkir'));
+      expect(text, contains('A. Parkir'));
       expect(text, contains('LPJ Discova'));
-      expect(text, contains('a. Tol'));
-      expect(text, contains('b. Penyeberangan'));
-      expect(text, contains('c. Parkir'));
+      expect(text, contains('A. Tol'));
+      expect(text, contains('B. Penyeberangan'));
+      expect(text, contains('C. Parkir'));
       expect(text, isNot(contains('Uang Saku Discova')));
     }
     Navigator.of(tester.element(find.byType(PreviewScreen))).pop();
@@ -408,7 +405,7 @@ void main() {
     saved = saved.copyWith(extras: []);
     await pump(tester, FormScreen(report: saved));
     await tap(tester, find.text('2. LPJ Kantor'));
-    await tap(tester, find.text('Tambah Extra'));
+    await tap(tester, find.text('Tambah Extra Kantor'));
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Nama extra 1'), 'Tol');
     await tester.enterText(
@@ -429,7 +426,7 @@ void main() {
     expect(count(tester, original), 1);
     await tap(tester, find.text('Hapus'));
     await tap(tester, find.text('Hapus extra'));
-    await tap(tester, find.text('Tambah Extra'));
+    await tap(tester, find.text('Tambah Extra Kantor'));
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Nama extra 1'), 'Tol');
     await tester.enterText(

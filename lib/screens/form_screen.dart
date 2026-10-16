@@ -500,6 +500,17 @@ class _FormScreenState extends State<FormScreen> {
               _text(_namaTamu, 'Nama tamu', hint: 'Nama tamu atau kelompok'),
             ])),
         const SizedBox(height: 12),
+        SectionCard(
+            padding: const EdgeInsets.all(16),
+            child: Column(children: [
+              const SectionHeading(
+                  title: 'Pembayaran Tagihan',
+                  compact: true,
+                  subtitle: 'Titipan pelunasan armada dari tamu.',
+                  icon: Icons.payments_outlined),
+              _numberField(_pembayaranTagihan, 'Pembayaran tagihan'),
+            ])),
+        const SizedBox(height: 12),
         _periodFields(),
         const SizedBox(height: 12),
         SectionCard(
@@ -832,6 +843,8 @@ class _FormScreenState extends State<FormScreen> {
                   onChanged: (_) => setState(() => _uangMakanIsManual = true)),
               const SizedBox(height: 12),
               ..._extraFields(),
+              const SizedBox(height: 12),
+              _text(_catatan, 'Catatan kantor', hint: 'Opsional', maxLines: 3),
             ])),
         const SizedBox(height: 12),
         _balanceCard(),
@@ -855,23 +868,7 @@ class _FormScreenState extends State<FormScreen> {
                   icon: Icons.draw_outlined),
               _text(_namaCrew, 'Nama crew',
                   hint: 'Nama lengkap pembuat laporan'),
-              const SizedBox(height: 12),
-              _text(_catatan, 'Catatan tambahan',
-                  hint: 'Opsional', maxLines: 3),
             ])),
-        const SizedBox(height: 12),
-        SectionCard(
-            padding: const EdgeInsets.all(16),
-            child: Column(children: [
-              const SectionHeading(
-                  title: 'Pembayaran Tagihan',
-                  compact: true,
-                  subtitle: 'Titipan pelunasan armada dari tamu.',
-                  icon: Icons.payments_outlined),
-              _numberField(_pembayaranTagihan, 'Pembayaran tagihan'),
-            ])),
-        const SizedBox(height: 12),
-        _balanceCard(),
         const SizedBox(height: 12),
         OutlinedButton.icon(
             onPressed: _busy ? null : _onPreview,
@@ -911,13 +908,22 @@ class _FormScreenState extends State<FormScreen> {
             InputDecoration(labelText: label, hintText: '0', prefixText: 'Rp '),
       );
 
-  Widget _summaryRow(String label, String value) => Wrap(
+  Widget _summaryRow(String label, String value,
+          {Color? labelColor,
+          Color? valueColor,
+          FontWeight? labelWeight,
+          FontWeight valueWeight = FontWeight.w700}) =>
+      Wrap(
         spacing: 16,
         runSpacing: 4,
         alignment: WrapAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: AppColors.muted)),
-          Text(value, style: const TextStyle(fontWeight: FontWeight.w700))
+          Text(label,
+              style: TextStyle(
+                  color: labelColor ?? AppColors.muted,
+                  fontWeight: labelWeight)),
+          Text(value,
+              style: TextStyle(fontWeight: valueWeight, color: valueColor))
         ],
       );
 
@@ -939,15 +945,13 @@ class _FormScreenState extends State<FormScreen> {
         const SizedBox(height: 8),
         _summaryRow('Total Pengeluaran', formatRupiah(report.totalPengeluaran)),
         const Divider(height: 20),
-        Text(deficit ? 'Defisit Kantor' : 'Sisa Uang Kantor',
-            style: TextStyle(color: color, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        Text(formatRupiah(report.sisa),
-            style: TextStyle(
-                color: color,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -.5)),
+        _summaryRow(
+          deficit ? 'Defisit Kantor' : 'Sisa Uang Kantor',
+          formatRupiah(report.sisa),
+          labelColor: color,
+          valueColor: color,
+          valueWeight: FontWeight.w800,
+        ),
       ]),
     );
   }
@@ -1045,15 +1049,13 @@ class _FormScreenState extends State<FormScreen> {
         _summaryRow('Total Pengeluaran Discova',
             formatRupiah(report.guestTotalPengeluaran)),
         const Divider(height: 20),
-        Text(deficit ? 'Defisit Uang Discova' : 'Sisa Uang Discova',
-            style: TextStyle(color: color, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        Text(formatRupiah(report.guestSisa),
-            style: TextStyle(
-                color: color,
-                fontSize: 22,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -.5)),
+        _summaryRow(
+          deficit ? 'Defisit Uang Discova' : 'Sisa Uang Discova',
+          formatRupiah(report.guestSisa),
+          labelColor: color,
+          valueColor: color,
+          valueWeight: FontWeight.w800,
+        ),
       ]),
     );
   }
@@ -1131,12 +1133,6 @@ class _FormScreenState extends State<FormScreen> {
   }
 
   List<Widget> _extraFields() => [
-        const Align(
-          alignment: Alignment.centerLeft,
-          child: Text('Extra',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-        ),
-        const SizedBox(height: 8),
         for (var i = 0; i < _extraNames.length; i++) ...[
           Container(
             key: ObjectKey(_extraNames[i]),
@@ -1176,7 +1172,7 @@ class _FormScreenState extends State<FormScreen> {
         OutlinedButton.icon(
           onPressed: _busy ? null : _addExtra,
           icon: const Icon(Icons.add_rounded, size: 20),
-          label: const Text('Tambah Extra'),
+          label: const Text('Tambah Extra Kantor'),
         ),
       ];
 

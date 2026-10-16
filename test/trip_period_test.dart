@@ -122,18 +122,18 @@ void main() {
       period(8, 8, TripType.dalamKota),
     ], hasGuestAllowance: true, guestUangSaku: 100000, guestTol: 10000);
     expect(report.mealDays, 3);
-    expect(report.uangMakan, 150000);
-    expect(report.totalPengeluaran, 500000);
-    expect(report.sisa, 500000);
+    expect(report.uangMakan, 120000);
+    expect(report.totalPengeluaran, 470000);
+    expect(report.sisa, 530000);
     expect(report.guestSisa, 90000);
     expect(report.pembayaranTagihan, 500000);
     final restored = Report.fromMap({...report.toMap(), 'uang_makan': 999999});
-    expect(restored.uangMakan, 150000);
-    expect(restored.toMap()['uang_makan'], 150000);
+    expect(restored.uangMakan, 120000);
+    expect(restored.toMap()['uang_makan'], 120000);
     expect(
         restored.copyWith(
             tripPeriods: [period(1, 3, TripType.dalamKota)]).uangMakan,
-        150000);
+        120000);
     expect(restored.copyWith(tripPeriods: []).uangMakan, 0);
     expect(legacyReport().uangMakan, 0);
   });
@@ -162,9 +162,9 @@ void main() {
       expect(() => original.tripPeriods!.clear(), throwsUnsupportedError);
       expect(original.luarKotaCount, 2);
       expect(original.dalamKotaCount, 3);
-      expect(original.uangMakan, 250000);
-      expect(original.totalPengeluaran, 600000);
-      expect(original.sisa, 400000);
+      expect(original.uangMakan, 200000);
+      expect(original.totalPengeluaran, 550000);
+      expect(original.sisa, 450000);
       expect(original.pembayaranTagihan, legacyReport().pembayaranTagihan);
       final restored = Report.fromMap(original.toMap());
       expect(restored.toMap(), original.toMap());

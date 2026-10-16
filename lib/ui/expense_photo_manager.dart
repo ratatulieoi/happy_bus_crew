@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 
 import '../models/report_attachment.dart';
@@ -31,6 +32,26 @@ class _ExpensePhotoManagerState extends State<ExpensePhotoManager> {
   bool _picking = false;
   String? _error;
 
+  static Future<void> _cropToSquare(String filePath) async {
+    try {
+      final file = File(filePath);
+      final bytes = await file.readAsBytes();
+      final decoded = img.decodeImage(bytes);
+      if (decoded == null) return;
+      final oriented = img.bakeOrientation(decoded);
+      final width = oriented.width;
+      final height = oriented.height;
+      if (width == height) return;
+      final side = width < height ? width : height;
+      final x = (width - side) ~/ 2;
+      final y = (height - side) ~/ 2;
+      final cropped =
+          img.copyCrop(oriented, x: x, y: y, width: side, height: side);
+      final encoded = img.encodeJpg(cropped, quality: 80);
+      await file.writeAsBytes(encoded, flush: true);
+    } catch (_) {}
+  }
+
   Future<void> _pick(ImageSource source) async {
     if (_picking) return;
     setState(() {
@@ -52,7 +73,12 @@ class _ExpensePhotoManagerState extends State<ExpensePhotoManager> {
           maxHeight: 1440,
           imageQuality: 80,
         );
-        picked = image == null ? [] : [image];
+        if (image != null) {
+          await _cropToSquare(image.path);
+          picked = [image];
+        } else {
+          picked = [];
+        }
       }
       if (!mounted || picked.isEmpty) return;
       setState(() => _photos.addAll(picked.map((image) =>

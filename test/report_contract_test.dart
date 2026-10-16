@@ -107,10 +107,10 @@ void main() {
     expect(r.guestExtraTotal, 5000);
     expect(r.guestTotalPengeluaran, 40000);
     expect(r.guestSisa, 60000);
-    expect(r.totalPengeluaran, 750000);
-    expect(r.sisa, 250000);
-    expect(r.copyWith(guestUangSaku: 1000).totalPengeluaran, 750000);
-    expect(r.copyWith(guestTol: 0).sisa, 250000);
+    expect(r.totalPengeluaran, 730000);
+    expect(r.sisa, 270000);
+    expect(r.copyWith(guestUangSaku: 1000).totalPengeluaran, 730000);
+    expect(r.copyWith(guestTol: 0).sisa, 270000);
   });
 
   test('hasGuestData reflects the toggle and every guest field', () {
@@ -241,11 +241,11 @@ void main() {
     expect(r.toMap()['pembayaran_tagihan'], 50000);
     expect(Report.fromMap(r.toMap()).pembayaranTagihan, 50000);
     expect(r.extra, 50000);
-    expect(r.totalPengeluaran, 750000);
-    expect(r.sisa, 250000);
-    expect(r.copyWith(pembayaranTagihan: 900000).sisa, 250000);
-    expect(r.copyWith(uangSaku: 500000).sisa, -250000);
-    expect(r.copyWith(uangSaku: 750000).sisa, 0);
+    expect(r.totalPengeluaran, 730000);
+    expect(r.sisa, 270000);
+    expect(r.copyWith(pembayaranTagihan: 900000).sisa, 270000);
+    expect(r.copyWith(uangSaku: 500000).sisa, -230000);
+    expect(r.copyWith(uangSaku: 730000).sisa, 0);
   });
 
   test('multiple extras sum exactly once and round-trip with names', () {
@@ -255,7 +255,7 @@ void main() {
       ExtraExpense(name: 'Cuci bus', amount: 50000),
     ]);
     expect(r.extra, 220000);
-    expect(r.totalPengeluaran, 600000 + 100000 + 220000);
+    expect(r.totalPengeluaran, 600000 + 80000 + 220000);
     final restored = Report.fromMap(r.toMap());
     expect(restored.extras.map((item) => item.name),
         ['Parkir', 'Tol', 'Cuci bus']);
@@ -305,7 +305,7 @@ void main() {
     expect(cleared.toMap()['extra'], 0);
     expect(cleared.toMap()['extra_details'], '[]');
     expect(Report.fromMap(cleared.toMap()).extras, isEmpty);
-    expect(cleared.totalPengeluaran, 700000);
+    expect(cleared.totalPengeluaran, 680000);
   });
 
   test('guest name round-trips, survives edits and defaults when absent', () {
@@ -371,14 +371,14 @@ void main() {
     final doc = await ReportPdfBuilder.build(report());
     final text = normalizePdfText((await pdfPageText(doc)).join('\n'));
     expect(text, contains('BBM Rp600.000'));
-    expect(text, contains('Uang Makan · 2 hari × Rp50.000 Rp100.000'));
+    expect(text, contains('Uang Makan · 2 hari × Rp40.000 Rp80.000'));
     expect(text, contains('Parkir Rp20.000'));
     expect(text, contains('Tol Rp30.000'));
     expect(text.indexOf('BBM'), lessThan(text.indexOf('Uang Makan')));
     expect(text.indexOf('Uang Makan'), lessThan(text.indexOf('Parkir')));
     expect(text.indexOf('Parkir'), lessThan(text.indexOf('Tol')));
-    expect(text, contains('Total Pengeluaran Rp750.000'));
-    expect(text, contains('Sisa Rp250.000'));
+    expect(text, contains('Total Pengeluaran Rp730.000'));
+    expect(text, contains('Sisa Rp270.000'));
     expect(text, contains('Pelunasan Rp50.000'));
   });
 

@@ -118,7 +118,7 @@ void main() {
     expect(restored.luarKotaCount, 4);
     expect(restored.dalamKotaCount, 1);
     expect(restored.mealDays, 5);
-    expect(restored.uangMakan, 250000);
+    expect(restored.uangMakan, 200000);
     expect(TripPeriod.validateNoOverlap(restored.tripPeriods!), isNull);
   });
 

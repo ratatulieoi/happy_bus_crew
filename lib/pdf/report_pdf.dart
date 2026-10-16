@@ -14,10 +14,14 @@ import '../utils/format.dart';
 class ReportPdfBuilder {
   static const _margin = 40.0;
   static const photoGap = 8.0;
-  static const photoHeightPortrait = 160.0;
-  static const photoHeightLandscape = 120.0;
   static const maxPhotoRowWidth = 515.0;
-  static const photosPerRow = 4;
+  static const photosPerRow = 3;
+  static const photoLeftIndent = 22.0;
+  static const photoSize =
+      (maxPhotoRowWidth - photoLeftIndent - (photosPerRow - 1) * photoGap) /
+          photosPerRow;
+  static const photoHeightPortrait = photoSize;
+  static const photoHeightLandscape = photoSize;
   static const _moneyWidth = 75.0;
   static const _ink = PdfColor(0.12, 0.12, 0.12);
   static const _muted = PdfColor(0.38, 0.38, 0.38);
@@ -55,6 +59,8 @@ class ReportPdfBuilder {
           footer: _footer,
           build: (_) => content,
         );
+    final hasNotes = report.catatan.trim().isNotEmpty ||
+        (report.hasGuestAllowance && report.guestCatatan.trim().isNotEmpty);
 
     doc.addPage(section('LPJ CREW', [
       _identity(report),
@@ -70,7 +76,7 @@ class ReportPdfBuilder {
           (
             report.uangMakanIsManual
                 ? 'Uang Makan'
-                : 'Uang Makan · ${report.mealDays} hari × Rp50.000',
+                : 'Uang Makan · ${report.mealDays} hari × Rp40.000',
             report.uangMakan
           ),
           for (final extra in report.extras) (_extraName(extra), extra.amount),
@@ -94,12 +100,26 @@ class ReportPdfBuilder {
           report.guestSisa,
         ),
       ],
+      if (hasNotes) ...[
+        pw.SizedBox(height: 18),
+        _rule(),
+        pw.SizedBox(height: 8),
+        _bulletTitle('Catatan'),
+        pw.SizedBox(height: 6),
+        if (report.catatan.trim().isNotEmpty) ...[
+          _noteCard('Catatan Kantor', report.catatan),
+          pw.SizedBox(height: 8),
+        ],
+        if (report.hasGuestAllowance &&
+            report.guestCatatan.trim().isNotEmpty) ...[
+          _noteCard('Catatan Discova', report.guestCatatan),
+          pw.SizedBox(height: 8),
+        ],
+      ],
     ]));
 
     final groups = groupAttachments(report, attachmentImages);
-    final hasNotes = report.catatan.trim().isNotEmpty ||
-        (report.hasGuestAllowance && report.guestCatatan.trim().isNotEmpty);
-    if (hasNotes || groups.isNotEmpty) {
+    if (groups.isNotEmpty) {
       final officeGroups =
           groups.where((g) => _isOfficeOwner(g.owner)).toList();
       final discovaGroups =
@@ -108,25 +128,8 @@ class ReportPdfBuilder {
           .where((g) => !_isOfficeOwner(g.owner) && !_isDiscovaOwner(g.owner))
           .toList();
 
-      doc.addPage(section('Catatan dan Lampiran', [
-        if (hasNotes) ...[
-          _rule(),
-          pw.SizedBox(height: 8),
-          _bulletTitle('Catatan'),
-          pw.SizedBox(height: 6),
-          if (report.catatan.trim().isNotEmpty) ...[
-            _noteCard('Catatan Kantor', report.catatan),
-            pw.SizedBox(height: 8),
-          ],
-          if (report.hasGuestAllowance &&
-              report.guestCatatan.trim().isNotEmpty) ...[
-            _noteCard('Catatan Discova', report.guestCatatan),
-            pw.SizedBox(height: 8),
-          ],
-          pw.SizedBox(height: 12),
-        ],
+      doc.addPage(section('Lampiran', [
         if (officeGroups.isNotEmpty) ...[
-          pw.NewPage(freeSpace: 180),
           _rule(),
           pw.SizedBox(height: 8),
           _bulletTitle('LPJ Kantor'),
@@ -138,7 +141,7 @@ class ReportPdfBuilder {
           pw.SizedBox(height: 12),
         ],
         if (discovaGroups.isNotEmpty) ...[
-          pw.NewPage(freeSpace: 180),
+          if (officeGroups.isNotEmpty) pw.NewPage(freeSpace: 180),
           _rule(),
           pw.SizedBox(height: 8),
           _bulletTitle('LPJ Discova'),
@@ -150,7 +153,8 @@ class ReportPdfBuilder {
           pw.SizedBox(height: 12),
         ],
         if (otherGroups.isNotEmpty) ...[
-          pw.NewPage(freeSpace: 180),
+          if (officeGroups.isNotEmpty || discovaGroups.isNotEmpty)
+            pw.NewPage(freeSpace: 180),
           _rule(),
           pw.SizedBox(height: 8),
           _bulletTitle('Lampiran Lainnya'),
@@ -166,50 +170,6 @@ class ReportPdfBuilder {
   }
 
   static pw.Widget _header(String title, Uint8List logo, Report report) {
-    if (title != 'LPJ CREW') {
-      final bus = _busName(report.noPolisi);
-      return pw.Container(
-        margin: const pw.EdgeInsets.only(bottom: 12),
-        child: pw.Column(
-          crossAxisAlignment: pw.CrossAxisAlignment.start,
-          children: [
-            pw.Row(
-              crossAxisAlignment: pw.CrossAxisAlignment.end,
-              children: [
-                pw.SizedBox(
-                  width: 119,
-                  height: 33,
-                  child: logo.isEmpty
-                      ? pw.SizedBox()
-                      : pw.Image(pw.MemoryImage(logo),
-                          alignment: pw.Alignment.topLeft,
-                          fit: pw.BoxFit.contain),
-                ),
-                pw.Spacer(),
-                pw.Text(
-                  [
-                    'LPJ',
-                    if (bus.isNotEmpty) bus,
-                    DateFormat('dd.MM.yyyy').format(report.tanggalBuat)
-                  ].join(' / '),
-                  style: _small.copyWith(fontSize: 8.5),
-                ),
-              ],
-            ),
-            pw.SizedBox(height: 12),
-            pw.SizedBox(
-              width: double.infinity,
-              child: pw.Text(title,
-                  style: _heading.copyWith(fontSize: 16),
-                  textAlign: pw.TextAlign.center),
-            ),
-            pw.SizedBox(height: 10),
-            _rule(width: 0.75, color: const PdfColor(0.22, 0.22, 0.22)),
-          ],
-        ),
-      );
-    }
-
     final bus = _busName(report.noPolisi);
     final busLabel = bus.isNotEmpty ? bus : report.noPolisi.trim();
     final dateStr =
@@ -242,7 +202,7 @@ class ReportPdfBuilder {
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.center,
                   children: [
-                    pw.Text('LPJ CREW',
+                    pw.Text(title,
                         style: _bold.copyWith(
                             fontSize: 14, letterSpacing: 0.5)),
                     pw.SizedBox(height: 3),
@@ -494,7 +454,6 @@ class ReportPdfBuilder {
         ]),
       pw.TableRow(children: [
         pw.Column(children: [
-          pw.SizedBox(height: 4),
           pw.Row(children: [
             pw.Expanded(child: pw.SizedBox()),
             pw.SizedBox(
@@ -503,7 +462,7 @@ class ReportPdfBuilder {
             ),
           ]),
           pw.Padding(
-            padding: const pw.EdgeInsets.symmetric(vertical: 6),
+            padding: const pw.EdgeInsets.symmetric(vertical: 3.5),
             child: pw.Row(children: [
               pw.SizedBox(width: 22),
               pw.Expanded(
@@ -616,14 +575,13 @@ class ReportPdfBuilder {
           ]),
         pw.TableRow(children: [
           pw.Column(children: [
-            pw.SizedBox(height: 4),
             _partialRuleRow(left: true),
             pw.Padding(
-              padding: const pw.EdgeInsets.only(top: 4, bottom: 2),
+              padding: const pw.EdgeInsets.symmetric(vertical: 3.25),
               child: _moneyRow('Total Pengeluaran', left: total, indent: true),
             ),
             pw.Padding(
-              padding: const pw.EdgeInsets.only(top: 2),
+              padding: const pw.EdgeInsets.symmetric(vertical: 3.25),
               child: _moneyRow(
                 balance < 0 ? 'Defisit' : 'Sisa',
                 right: balance < 0 ? balance.abs() : balance,
@@ -849,15 +807,7 @@ class ReportPdfBuilder {
 
   static (double width, double height) photoDimensions(
       ReportAttachmentImage image) {
-    final ratio = imageAspectRatio(image);
-    final isLandscape = ratio >= 1.0;
-    var height = isLandscape ? photoHeightLandscape : photoHeightPortrait;
-    var width = height * ratio;
-    if (width > maxPhotoRowWidth) {
-      width = maxPhotoRowWidth;
-      height = width / ratio;
-    }
-    return (width, height);
+    return (photoSize, photoSize);
   }
 
   static pw.Widget _buildPhotoWidget(ReportAttachmentImage image) {
@@ -874,20 +824,20 @@ class ReportPdfBuilder {
 
   static pw.Widget _photoGroup(
       ReportPhotoGroup group, int index, Report report) {
-    final letter = String.fromCharCode(97 + (index % 26));
+    final letter = String.fromCharCode(65 + (index % 26));
     final name = _expenseItemLabel(report, group.owner);
     final label = '$letter. $name';
     return _rowTable([
       pw.TableRow(repeat: true, children: [
         pw.Padding(
-          padding: const pw.EdgeInsets.only(bottom: 8),
+          padding: const pw.EdgeInsets.only(left: photoLeftIndent, bottom: 8),
           child: pw.Text(label, style: _bold.copyWith(fontSize: 10.5)),
         ),
       ]),
       for (final row in group.rows)
         pw.TableRow(children: [
           pw.Padding(
-            padding: const pw.EdgeInsets.only(bottom: 8),
+            padding: const pw.EdgeInsets.only(left: photoLeftIndent, bottom: 8),
             child: pw.Row(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
               children: [
@@ -926,32 +876,11 @@ class ReportPhotoGroup {
   Iterable<List<ReportAttachmentImage>> get rows sync* {
     if (images.isEmpty) return;
 
-    var currentRow = <ReportAttachmentImage>[];
-    var currentWidth = 0.0;
-
-    for (final image in images) {
-      final (width, _) = ReportPdfBuilder.photoDimensions(image);
-      final neededWidth = currentRow.isEmpty
-          ? width
-          : currentWidth + ReportPdfBuilder.photoGap + width;
-
-      final ratio = ReportPdfBuilder.imageAspectRatio(image);
-      final isLandscape = ratio >= 1.0;
-      final maxInRow = isLandscape ? 3 : 4;
-
-      if (currentRow.isNotEmpty &&
-          (neededWidth > ReportPdfBuilder.maxPhotoRowWidth ||
-              currentRow.length >= maxInRow)) {
-        yield currentRow;
-        currentRow = [image];
-        currentWidth = width;
-      } else {
-        currentRow.add(image);
-        currentWidth = neededWidth;
-      }
-    }
-    if (currentRow.isNotEmpty) {
-      yield currentRow;
+    for (var i = 0; i < images.length; i += ReportPdfBuilder.photosPerRow) {
+      final end = (i + ReportPdfBuilder.photosPerRow < images.length)
+          ? i + ReportPdfBuilder.photosPerRow
+          : images.length;
+      yield images.sublist(i, end);
     }
   }
 }

@@ -88,7 +88,7 @@ class Report {
   // --- Keuangan ---
   int uangSaku;
   int bbm;
-  static const mealAllowancePerDay = 50000;
+  static const mealAllowancePerDay = 40000;
   static int countMealDays(Iterable<TripPeriod> periods) =>
       periods.fold(0, (sum, period) => sum + period.days);
   static int automaticMealAllowance(Iterable<TripPeriod> periods) =>

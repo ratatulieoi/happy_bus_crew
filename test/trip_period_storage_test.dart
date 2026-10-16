@@ -170,7 +170,7 @@ void main() {
         ['Malang', 'Surabaya', '', '']);
     expect(restored.luarKotaCount, 2);
     expect(restored.dalamKotaCount, 5);
-    expect(restored.uangMakan, 350000);
+    expect(restored.uangMakan, 280000);
     expect(await store.getAttachments(id), attachments);
     final reopenedDatabase = await store.db;
     expect(await reopenedDatabase.getVersion(), version);
@@ -193,10 +193,10 @@ void main() {
     final id = await store.saveReportWithAttachments(original, []);
     await store.close();
     var reopened = (await store.getReport(id))!;
-    expect(reopened.uangMakan, 150000);
-    expect(reopened.totalPengeluaran, 500000);
+    expect(reopened.uangMakan, 120000);
+    expect(reopened.totalPengeluaran, 470000);
     expect(
-        (await (await store.db).query('reports')).single['uang_makan'], 150000);
+        (await (await store.db).query('reports')).single['uang_makan'], 120000);
     await store.saveReportWithAttachments(
         reopened.copyWith(tripPeriods: [
           TripPeriod(
@@ -207,8 +207,8 @@ void main() {
         []);
     await store.close();
     reopened = (await store.getReport(id))!;
-    expect(reopened.uangMakan, 200000);
-    expect(reopened.sisa, 450000);
+    expect(reopened.uangMakan, 160000);
+    expect(reopened.sisa, 490000);
     await store
         .saveReportWithAttachments(reopened.copyWith(tripPeriods: []), []);
     await store.close();
@@ -267,7 +267,7 @@ void main() {
       for (final row in attachments)
         {...row, 'expense_type': null, 'extra_id': null},
     ]);
-    expect((await store.getReport(id))!.uangMakan, 250000);
+    expect((await store.getReport(id))!.uangMakan, 200000);
     expect((await store.getReport(id))!.uangMakanIsManual, isFalse);
   });
 
@@ -370,8 +370,8 @@ void main() {
     expect(replaced.tripPeriods, hasLength(2));
     expect(replaced.luarKotaCount, 2);
     expect(replaced.dalamKotaCount, 3);
-    expect(replaced.uangMakan, 250000);
-    expect(replaced.totalPengeluaran, 600000);
+    expect(replaced.uangMakan, 200000);
+    expect(replaced.totalPengeluaran, 550000);
     expect(replaced.pembayaranTagihan, restored.pembayaranTagihan);
     expect(await store.getAttachments(id), paths);
   });

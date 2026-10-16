@@ -660,6 +660,9 @@ void main() {
     expect(find.text('KM awal'), findsNothing);
     expect(find.text('KM akhir'), findsNothing);
     expect(find.text('Periode'), findsNWidgets(2));
+    final paymentField = tester.widget<TextFormField>(
+        find.widgetWithText(TextFormField, 'Pembayaran tagihan'));
+    expect(paymentField.controller!.text, '100.000');
     await capture(tester, 'report-trip');
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
@@ -670,13 +673,10 @@ void main() {
     expect(find.text('Rp 950.000'), findsOneWidget);
     expect(find.text('Rp 50.000'), findsOneWidget);
     expect(find.text('Sisa Uang Kantor'), findsOneWidget);
+    expect(find.text('Perjalanan lancar.'), findsOneWidget);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    final paymentField = tester.widget<TextFormField>(
-        find.widgetWithText(TextFormField, 'Pembayaran tagihan'));
-    expect(paymentField.controller!.text, '100.000');
     expect(find.text('Budi Santoso'), findsOneWidget);
-    expect(find.text('Perjalanan lancar.'), findsOneWidget);
     await capture(tester, 'report-attachments');
     await tester.tap(find.text('Kembali').last);
     await tester.pumpAndSettle();
@@ -958,17 +958,17 @@ void main() {
     await pumpScreen(tester, FormScreen(report: fixture()));
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    await reveal(tester, find.text('Tambah Extra'));
+    await reveal(tester, find.text('Tambah Extra Kantor'));
     final labels = ['BBM', 'Uang makan (0 hari)'];
     final positions = [
       for (final label in labels)
         tester.getTopLeft(find.widgetWithText(TextFormField, label)).dy,
-      tester.getTopLeft(find.text('Extra')).dy,
+      tester.getTopLeft(find.text('Tambah Extra Kantor')).dy,
     ];
     for (var i = 1; i < positions.length; i++) {
       expect(positions[i], greaterThan(positions[i - 1]));
     }
-    await tester.tap(find.text('Tambah Extra'));
+    await tester.tap(find.text('Tambah Extra Kantor'));
     await tester.pumpAndSettle();
     await fillExtra(tester, 3, 'Cuci bus', '50000');
     await fillExtra(tester, 2, 'Tol kota', '150000');
@@ -1010,8 +1010,8 @@ void main() {
         tester, FormScreen(report: fixture().copyWith(extras: [])));
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    await reveal(tester, find.text('Tambah Extra'));
-    await tester.tap(find.text('Tambah Extra'));
+    await reveal(tester, find.text('Tambah Extra Kantor'));
+    await tester.tap(find.text('Tambah Extra Kantor'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
@@ -1053,8 +1053,8 @@ void main() {
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     for (var i = 1; i <= 2; i++) {
-      await reveal(tester, find.text('Tambah Extra'));
-      await tester.tap(find.text('Tambah Extra'));
+      await reveal(tester, find.text('Tambah Extra Kantor'));
+      await tester.tap(find.text('Tambah Extra Kantor'));
       await tester.pumpAndSettle();
       await fillExtra(
           tester, i, i == 1 ? 'Parkir' : 'Tol', i == 1 ? '20000' : '150000');
@@ -1078,7 +1078,7 @@ void main() {
     expect(find.text('Belum ada periode.'), findsOneWidget);
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
-    await reveal(tester, find.text('Tambah Extra'));
+    await reveal(tester, find.text('Tambah Extra Kantor'));
     expect(
         tester
             .widget<TextFormField>(
@@ -1271,7 +1271,7 @@ void main() {
         ['Malang', 'Surabaya']);
     expect(restored.luarKotaCount, 2);
     expect(restored.dalamKotaCount, 1);
-    expect(restored.uangMakan, 150000);
+    expect(restored.uangMakan, 120000);
 
     await pumpScreen(tester, FormScreen(report: restored));
     await reveal(tester, destinationField(1));
@@ -1677,7 +1677,7 @@ void main() {
     await tester.pumpAndSettle();
     final meal = find.widgetWithText(TextFormField, 'Uang makan (1 hari)');
     await reveal(tester, meal);
-    expect(tester.widget<TextFormField>(meal).controller!.text, '50.000');
+    expect(tester.widget<TextFormField>(meal).controller!.text, '40.000');
     expect(tester.takeException(), isNull);
   });
 
@@ -1799,29 +1799,29 @@ void main() {
     await tester.pumpAndSettle();
     final meal = find.widgetWithText(TextFormField, 'Uang makan (3 hari)');
     await reveal(tester, meal);
-    expect(tester.widget<TextFormField>(meal).controller!.text, '150.000');
+    expect(tester.widget<TextFormField>(meal).controller!.text, '120.000');
     await reveal(tester, find.text('Total Pengeluaran'));
-    expect(find.text('Rp 150.000'), findsWidgets);
+    expect(find.text('Rp 120.000'), findsWidgets);
     await tester.tap(find.byTooltip('Pratinjau PDF tanpa menyimpan'));
     await tester.pump();
     await tester.pump(const Duration(seconds: 1));
     final preview = tester.widget<PreviewScreen>(find.byType(PreviewScreen));
-    expect(preview.report.uangMakan, 150000);
-    expect(preview.report.sisa, -150000);
+    expect(preview.report.uangMakan, 120000);
+    expect(preview.report.sisa, -120000);
     await tester.tap(find.byType(BackButton));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Simpan laporan'));
     await tester.pumpAndSettle();
-    expect(savedReport?['uang_makan'], 150000);
+    expect(savedReport?['uang_makan'], 120000);
     final restored = Report.fromMap(savedReport!);
-    expect(restored.uangMakan, 150000);
+    expect(restored.uangMakan, 120000);
     await pumpScreen(tester, FormScreen(report: restored));
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     await reveal(tester, meal);
-    expect(tester.widget<TextFormField>(meal).controller!.text, '150.000');
+    expect(tester.widget<TextFormField>(meal).controller!.text, '120.000');
     expect(tester.takeException(), isNull);
   });
 
@@ -1847,13 +1847,13 @@ void main() {
     await expectMeal(0, '0');
     await addPeriod(
         tester, DateTime(2026, 6, 1), DateTime(2026, 6, 2), TripType.luarKota);
-    await expectMeal(2, '100.000');
+    await expectMeal(2, '80.000');
     await addPeriod(
         tester, DateTime(2026, 6, 8), DateTime(2026, 6, 8), TripType.dalamKota);
-    await expectMeal(3, '150.000');
+    await expectMeal(3, '120.000');
     await openRange(tester, 0);
     await returnRange(tester, DateTime(2026, 6, 1), DateTime(2026, 6, 3));
-    await expectMeal(4, '200.000');
+    await expectMeal(4, '160.000');
     await tester.tap(find.text('Lanjut'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Lanjut'));
@@ -1866,7 +1866,7 @@ void main() {
     await reveal(tester, find.byTooltip('Hapus periode 1'));
     await tester.tap(find.byTooltip('Hapus periode 1'));
     await tester.pumpAndSettle();
-    await expectMeal(1, '50.000');
+    await expectMeal(1, '40.000');
     await reveal(tester, find.byTooltip('Hapus periode 1'));
     await tester.tap(find.byTooltip('Hapus periode 1'));
     await tester.pumpAndSettle();
@@ -1977,7 +1977,7 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Simpan laporan'));
     await tester.pumpAndSettle();
-    expect(savedReport?['uang_makan'], 250000);
+    expect(savedReport?['uang_makan'], 200000);
     expect(tester.takeException(), isNull);
   });
 
