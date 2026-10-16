@@ -6,6 +6,7 @@ import 'package:happy_bus_crew/models/bus.dart';
 import 'package:happy_bus_crew/models/report.dart';
 import 'package:happy_bus_crew/models/report_attachment.dart';
 import 'package:happy_bus_crew/pdf/report_pdf.dart';
+import 'package:image/image.dart' as img;
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:pdf/pdf.dart';
 
@@ -446,5 +447,70 @@ void main() {
     expect(text, contains('Total Periode 80 Hari LK 80 / DK 0'));
     expect('Pelunasan'.allMatches(text), hasLength(1));
     expect(pages.first, contains('Rani Wulandari'));
+  });
+
+  test('photo group titles do not appear without photos at bottom of page',
+      () async {
+    final squareBytes = Uint8List.fromList(
+        img.encodeJpg(img.Image(width: 100, height: 100)));
+    final r = Report.fromMap({
+      'id': 1,
+      'tanggal_buat': '2026-10-16T00:00:00',
+      'no_polisi': 'AB 1097 DF',
+      'nama_crew': 'joko',
+      'nama_tamu': 'retno',
+      'has_guest_allowance': 1,
+      'guest_tol': 10000,
+      'guest_penyeberangan': 20000,
+      'guest_parkir': 5000,
+    }).copyWith(
+      extras: [
+        ExtraExpense(id: 'extra1', name: 'batreai', amount: 10000),
+        ExtraExpense(id: 'extra2', name: 'baju renang', amount: 20000),
+      ],
+    );
+
+    final attachments = <ReportAttachmentImage>[
+      for (var i = 0; i < 4; i++)
+        ReportAttachmentImage(
+            bytes: squareBytes,
+            owner: const ExpenseOwner(ExpenseType.officeBbm)),
+      for (var i = 0; i < 3; i++)
+        ReportAttachmentImage(
+            bytes: squareBytes,
+            owner:
+                const ExpenseOwner(ExpenseType.officeExtra, extraId: 'extra1')),
+      for (var i = 0; i < 3; i++)
+        ReportAttachmentImage(
+            bytes: squareBytes,
+            owner:
+                const ExpenseOwner(ExpenseType.officeExtra, extraId: 'extra2')),
+      for (var i = 0; i < 2; i++)
+        ReportAttachmentImage(
+            bytes: squareBytes,
+            owner: const ExpenseOwner(ExpenseType.discovaTol)),
+      ReportAttachmentImage(
+          bytes: squareBytes,
+          owner: const ExpenseOwner(ExpenseType.discovaCrossing)),
+      ReportAttachmentImage(
+          bytes: squareBytes,
+          owner: const ExpenseOwner(ExpenseType.discovaParking)),
+    ];
+
+    final doc = await ReportPdfBuilder.build(r, attachmentImages: attachments);
+    final geom = await pdfGeometry(doc);
+    expect(geom.length, 4);
+
+    final pages = (await pdfPageText(doc)).map(normalizePdfText).toList();
+    expect(pages[1], contains('A. BBM'));
+    expect(pages[1], contains('B. batreai'));
+    expect(pages[1], isNot(contains('baju renang')));
+
+    expect(pages[2], contains('C. baju renang'));
+    expect(pages[2], contains('A. Tol'));
+    expect(pages[2], contains('B. Penyeberangan'));
+    expect(pages[2], isNot(contains('Parkir')));
+
+    expect(pages[3], contains('C. Parkir'));
   });
 }

@@ -135,18 +135,20 @@ class ReportPdfBuilder {
           _bulletTitle('LPJ Kantor'),
           pw.SizedBox(height: 6),
           for (var i = 0; i < officeGroups.length; i++) ...[
+            if (i > 0) pw.NewPage(freeSpace: 195),
             _photoGroup(officeGroups[i], i, report),
             pw.SizedBox(height: 10),
           ],
           pw.SizedBox(height: 12),
         ],
         if (discovaGroups.isNotEmpty) ...[
-          if (officeGroups.isNotEmpty) pw.NewPage(freeSpace: 180),
+          if (officeGroups.isNotEmpty) pw.NewPage(freeSpace: 230),
           _rule(),
           pw.SizedBox(height: 8),
           _bulletTitle('LPJ Discova'),
           pw.SizedBox(height: 6),
           for (var i = 0; i < discovaGroups.length; i++) ...[
+            if (i > 0) pw.NewPage(freeSpace: 195),
             _photoGroup(discovaGroups[i], i, report),
             pw.SizedBox(height: 10),
           ],
@@ -154,12 +156,13 @@ class ReportPdfBuilder {
         ],
         if (otherGroups.isNotEmpty) ...[
           if (officeGroups.isNotEmpty || discovaGroups.isNotEmpty)
-            pw.NewPage(freeSpace: 180),
+            pw.NewPage(freeSpace: 230),
           _rule(),
           pw.SizedBox(height: 8),
           _bulletTitle('Lampiran Lainnya'),
           pw.SizedBox(height: 6),
           for (var i = 0; i < otherGroups.length; i++) ...[
+            if (i > 0) pw.NewPage(freeSpace: 195),
             _photoGroup(otherGroups[i], i, report),
             pw.SizedBox(height: 10),
           ],
