@@ -94,7 +94,7 @@ void main() {
         contains('JADWAL Berangkat Kamis, 01/10/2026 Kembali Minggu, 11/10/2026'));
     expect(finance, contains('ARMADA HG2 (AB 7317 BK)'));
     expect(
-        finance, contains('CREW Pengemudi Budi Santoso Kernet Agus Prasetyo'));
+        finance, contains('CREW Sopir Budi Santoso Kernet Agus Prasetyo'));
     expect(finance, contains('TAMU Nama Dewi Lestari Pelunasan Rp12.000.000'));
     expect(finance, contains('Rabu, 07/10/2026 — Jumat, 09/10/2026 Malang → Surabaya 3 Hari LK'));
     expect(finance, contains('Kamis, 01/10/2026 — Jumat, 02/10/2026 Sleman 2 Hari DK'));

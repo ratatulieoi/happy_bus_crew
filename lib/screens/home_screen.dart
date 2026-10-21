@@ -243,7 +243,7 @@ class _HomeScreenState extends State<HomeScreen> {
     final deficit = report.sisa < 0;
     final busName = busNameForPlate(report.noPolisi);
     final driver =
-        report.pengemudi.isEmpty ? 'Pengemudi belum diisi' : report.pengemudi;
+        report.pengemudi.isEmpty ? 'Sopir belum diisi' : report.pengemudi;
     return Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(

@@ -313,7 +313,7 @@ class ReportPdfBuilder {
           pw.Text(busDisplay, style: _body),
         ]),
         _identityGroup('CREW', 115, [
-          _pair('Pengemudi',
+          _pair('Sopir',
               report.pengemudi.isEmpty ? '-' : report.pengemudi),
           _pair('Kernet', report.kernet.isEmpty ? '-' : report.kernet),
         ]),

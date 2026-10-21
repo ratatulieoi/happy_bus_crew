@@ -520,9 +520,9 @@ class _FormScreenState extends State<FormScreen> {
                   title: 'Crew',
                   compact: true,
                   icon: Icons.people_outline_rounded),
-              _text(_pengemudi, 'Nama pengemudi', hint: 'Nama sopir'),
+              _text(_pengemudi, 'Nama sopir', hint: 'Nama sopir'),
               const SizedBox(height: 12),
-              _text(_kernet, 'Nama kernet', hint: 'Nama asisten pengemudi'),
+              _text(_kernet, 'Nama kernet', hint: 'Nama asisten sopir'),
             ])),
       ];
 
