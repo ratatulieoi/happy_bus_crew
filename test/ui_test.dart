@@ -22,6 +22,7 @@ Report fixture(
         {int id = 1,
         DateTime? tanggalBuat,
         String plate = 'AB 7317 BK',
+        String guest = 'Bpk. Hartono',
         String driver = 'Budi Santoso',
         int allowance = 2000000}) =>
     Report(
@@ -31,7 +32,7 @@ Report fixture(
       jamBerangkat: '08:00',
       hariTglKembali: 'Sabtu, 13/06/2026',
       noPolisi: plate,
-      namaTamu: 'Bpk. Hartono',
+      namaTamu: guest,
       pengemudi: driver,
       kernet: 'Agus',
       kmAwal: 124000,
@@ -79,6 +80,7 @@ void main() {
           id: 2,
           tanggalBuat: DateTime(2026, 6, 11),
           plate: 'AB 7402 BK',
+          guest: 'Ibu Ratna',
           driver: 'Dedi',
           allowance: 500000)
     ];
@@ -547,14 +549,14 @@ void main() {
     await tester.pumpAndSettle();
     await tester.drag(find.byType(CustomScrollView), const Offset(0, -300));
     await tester.pumpAndSettle();
-    expect(find.text('HG3 • Dedi'), findsOneWidget);
-    expect(find.text('HG2 • Budi Santoso'), findsNothing);
+    expect(find.text('HG3 • Ibu Ratna'), findsOneWidget);
+    expect(find.text('HG2 • Bpk. Hartono'), findsNothing);
     await tester.tap(find.byTooltip('Hapus pencarian'));
     await tester.pumpAndSettle();
     await tester.tap(find.widgetWithText(ChoiceChip, 'HG2'));
     await tester.pumpAndSettle();
-    expect(find.text('HG3 • Dedi'), findsNothing);
-    expect(find.text('HG2 • Budi Santoso'), findsOneWidget);
+    expect(find.text('HG3 • Ibu Ratna'), findsNothing);
+    expect(find.text('HG2 • Bpk. Hartono'), findsOneWidget);
     await tester.tap(find.byTooltip('Tindakan laporan').first);
     await tester.pumpAndSettle();
     await tester.tap(find.text('Ubah laporan'));
@@ -2134,20 +2136,20 @@ void main() {
     final search = find.byType(TextField);
     await tester.enterText(search, 'HG3');
     await tester.pumpAndSettle();
-    await reveal(tester, find.text('HG3 • Dedi'));
-    expect(find.text('HG3 • Dedi'), findsOneWidget);
-    expect(find.text('HG2 • Budi Santoso'), findsNothing);
+    await reveal(tester, find.text('HG3 • Ibu Ratna'));
+    expect(find.text('HG3 • Ibu Ratna'), findsOneWidget);
+    expect(find.text('HG2 • Bpk. Hartono'), findsNothing);
     await tester.enterText(search, 'AB 7317 BK');
     await tester.pumpAndSettle();
-    expect(find.text('HG2 • Budi Santoso'), findsOneWidget);
-    expect(find.text('HG3 • Dedi'), findsNothing);
+    expect(find.text('HG2 • Bpk. Hartono'), findsOneWidget);
+    expect(find.text('HG3 • Ibu Ratna'), findsNothing);
     await tester.tap(find.byTooltip('Hapus pencarian'));
     await tester.pumpAndSettle();
     expect(find.widgetWithText(FilterChip, 'Defisit'), findsNothing);
     await tester.tap(find.widgetWithText(ChoiceChip, 'HG3'));
     await tester.pumpAndSettle();
-    expect(find.text('HG3 • Dedi'), findsOneWidget);
-    expect(find.text('HG2 • Budi Santoso'), findsNothing);
+    expect(find.text('HG3 • Ibu Ratna'), findsOneWidget);
+    expect(find.text('HG2 • Bpk. Hartono'), findsNothing);
     expectNoBusManagement();
     expect(tester.takeException(), isNull);
   });

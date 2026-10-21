@@ -80,7 +80,7 @@ class _HomeScreenState extends State<HomeScreen> {
     return _reports.where((r) {
       if (_filterPlate != null && r.noPolisi != _filterPlate) return false;
       final busName = busNameForPlate(r.noPolisi);
-      return '${r.noPolisi} $busName ${r.pengemudi} ${r.kernet} ${r.namaCrew} ${r.hariTglBerangkat} ${formatTanggalPendek(r.tanggalBuat)}'
+      return '${r.noPolisi} $busName ${r.namaTamu} ${r.pengemudi} ${r.kernet} ${r.namaCrew} ${r.hariTglBerangkat} ${formatTanggalPendek(r.tanggalBuat)}'
           .toLowerCase()
           .contains(query);
     }).toList();
@@ -242,8 +242,9 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _reportCard(Report report) {
     final deficit = report.sisa < 0;
     final busName = busNameForPlate(report.noPolisi);
-    final driver =
-        report.pengemudi.isEmpty ? 'Sopir belum diisi' : report.pengemudi;
+    final guest = report.namaTamu.trim().isEmpty
+        ? 'Nama tamu belum diisi'
+        : report.namaTamu.trim();
     return Material(
       color: Colors.white,
       shape: RoundedRectangleBorder(
@@ -286,7 +287,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       : report.noPolisi,
                   style: Theme.of(context).textTheme.titleMedium),
               const SizedBox(height: 4),
-              Text('$busName • $driver',
+              Text('$busName • $guest',
                   style: const TextStyle(color: AppColors.muted)),
               const Divider(height: 24),
               Padding(
