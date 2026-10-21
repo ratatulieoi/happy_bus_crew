@@ -504,11 +504,12 @@ class _FormScreenState extends State<FormScreen> {
             padding: const EdgeInsets.all(16),
             child: Column(children: [
               const SectionHeading(
-                  title: 'Pembayaran Tagihan',
+                  title: 'Pelunasan Tamu',
                   compact: true,
                   subtitle: 'Titipan pelunasan armada dari tamu.',
                   icon: Icons.payments_outlined),
-              _numberField(_pembayaranTagihan, 'Pembayaran tagihan'),
+              _numberField(_pembayaranTagihan, 'Pelunasan Tamu',
+                  hint: 'Pelunasan Tagihan Tamu'),
             ])),
         const SizedBox(height: 12),
         _periodFields(),
@@ -897,15 +898,15 @@ class _FormScreenState extends State<FormScreen> {
       );
 
   Widget _numberField(TextEditingController controller, String label,
-          {ValueChanged<String>? onChanged}) =>
+          {String? hint, ValueChanged<String>? onChanged}) =>
       TextFormField(
         controller: controller,
         onChanged: onChanged,
         keyboardType: TextInputType.number,
         textInputAction: TextInputAction.next,
         inputFormatters: [ThousandsSeparatorFormatter()],
-        decoration:
-            InputDecoration(labelText: label, hintText: '0', prefixText: 'Rp '),
+        decoration: InputDecoration(
+            labelText: label, hintText: hint ?? '0', prefixText: 'Rp '),
       );
 
   Widget _summaryRow(String label, String value,
