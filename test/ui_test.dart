@@ -663,7 +663,7 @@ void main() {
     expect(find.text('KM akhir'), findsNothing);
     expect(find.text('Periode'), findsNWidgets(2));
     final paymentField = tester.widget<TextFormField>(
-        find.widgetWithText(TextFormField, 'Pelunasan Tamu'));
+        find.widgetWithText(TextFormField, 'Pelunasan Tagihan Tamu'));
     expect(paymentField.controller!.text, '100.000');
     await capture(tester, 'report-trip');
     await tester.tap(find.text('Lanjut'));
