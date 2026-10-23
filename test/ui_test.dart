@@ -2250,6 +2250,8 @@ void main() {
           ReportAttachmentImage(bytes: Uint8List.fromList([1, 2, 3]))
         ]));
     final desktop = Platform.isLinux || Platform.isWindows || Platform.isMacOS;
+    expect(find.text('AB 7317 BK • Bpk. Hartono'), findsOneWidget);
+    expect(find.text('AB 7317 BK • Budi Santoso'), findsNothing);
     expect(find.text('Bagikan'), desktop ? findsNothing : findsOneWidget);
     expect(find.text('Simpan'), findsOneWidget);
     expect(find.text('Cetak'), findsOneWidget);

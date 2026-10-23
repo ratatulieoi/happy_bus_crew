@@ -204,7 +204,7 @@ class Report {
 
   /// Label ringkas untuk ditampilkan di daftar laporan (Home).
   String get ringkas =>
-      '${noPolisi.isEmpty ? "-" : noPolisi} • ${pengemudi.isEmpty ? "-" : pengemudi}';
+      '${noPolisi.isEmpty ? "-" : noPolisi} • ${namaTamu.trim().isEmpty ? "-" : namaTamu.trim()}';
 
   Map<String, dynamic> toMap() {
     return {
